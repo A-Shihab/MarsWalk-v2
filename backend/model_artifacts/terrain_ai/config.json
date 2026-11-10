@@ -1,0 +1,17 @@
+{
+    "model_name": "MARSWALK Terrain Segmentation",
+    "architecture": "U-Net",
+    "input_channels": 1,
+    "num_classes": 4,
+    "image_size": 256,
+    "ignore_index": 255,
+    "class_mapping": {
+        "0": "soil",
+        "1": "bedrock",
+        "2": "sand",
+        "3": "big_rock"
+    },
+    "training_dataset": "AI4MARS MSL",
+    "input_type": "grayscale rover camera image",
+    "output_type": "pixel-wise semantic segmentation"
+}
