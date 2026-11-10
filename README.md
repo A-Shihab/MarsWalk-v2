@@ -1,7 +1,8 @@
 # 🚀 MARSWALK — Autonomous Mars Rover Mission Control & Navigation Intelligence
 
-> **NASA Space Apps Challenge Project**  
-> An interactive Mars rover mission-planning and terrain intelligence platform combining DEM-based navigation, rover energy estimation, multi-strategy route comparison, and U-Net-powered AI terrain classification.
+> **NASA Space Apps Challenge Project**
+>
+> An interactive Mars rover mission-control platform combining DEM-based terrain analysis, autonomous pathfinding, multi-strategy route comparison, rover energy estimation, and AI-powered terrain classification for Jezero Crater.
 
 ---
 
@@ -9,47 +10,88 @@
 
 **MARSWALK** is a web-based Mars terrain intelligence and rover mission-planning platform designed to simulate and evaluate rover navigation across the Jezero Crater region of Mars.
 
-The platform combines high-resolution Digital Elevation Model (DEM) data, terrain analysis, graph-search pathfinding algorithms, rover energy estimation, and deep-learning-based terrain classification in one interactive dashboard.
+The platform integrates high-resolution Digital Elevation Model (DEM) data, terrain processing, graph-search pathfinding algorithms, rover energy estimation, and deep-learning-based terrain classification into an interactive dashboard.
 
-MARSWALK is designed to help users explore terrain conditions, plan rover missions, compare alternative navigation strategies, and understand potential terrain hazards through AI-assisted analysis.
+MARSWALK helps users:
 
-The platform currently provides three main interactive modules:
+- Plan rover missions between selected geographic coordinates.
+- Analyze terrain conditions using Jezero Crater DEM data.
+- Calculate traversable rover routes under configurable slope constraints.
+- Compare multiple navigation strategies.
+- Estimate rover energy consumption and battery safety.
+- Analyze rover-camera images using a trained U-Net segmentation model.
+- Generate natural-language mission explanations using Google Gemini.
 
-1. **Mission Planner** — Plans rover missions using terrain information, navigation constraints, and energy estimates.
-2. **Rover Route Planner** — Calculates and compares alternative navigation strategies, including shortest, safest, energy-efficient, and balanced routes.
-3. **AI Terrain Intelligence** — Uses a trained U-Net segmentation model to classify terrain in rover-camera images.
+## ✨ Main Features
 
----
+MARSWALK currently provides three main interactive modules.
 
-## ✨ Key Features
+### 1. Mission Planner
 
-### 1. Mission Planning
+The Mission Planner generates rover mission plans using actual Jezero Crater terrain raster data.
 
-- Configure rover starting and destination coordinates.
-- Generate a rover mission plan using Jezero Crater DEM data.
-- Evaluate terrain slope and navigation constraints.
-- Estimate rover energy consumption using configurable physical parameters.
-- Evaluate estimated energy requirements against available battery capacity and safety reserve.
-- Generate AI-assisted mission explanations using Google Gemini.
+**Key capabilities:**
 
-### 2. Intelligent Rover Route Planning
+- Select starting and destination coordinates.
+- Convert geographic coordinates into corresponding DEM raster positions.
+- Analyze elevation and terrain slope along the navigation area.
+- Evaluate terrain traversability using configurable maximum-slope constraints.
+- Generate a rover path using the navigation engine.
+- Estimate mission distance and rover energy requirements.
+- Evaluate estimated energy against battery capacity and safety reserve.
+- Generate AI-assisted mission explanations using Gemini.
 
-MARSWALK provides multiple route-planning strategies to help users compare different navigation approaches.
+**Mission planning workflow:**
 
-- **Shortest Route:** Prioritizes minimum travel distance.
-- **Safest Route:** Prioritizes lower terrain slope exposure.
-- **Energy-Efficient Route:** Prioritizes estimated energy consumption.
-- **Balanced Route:** Combines navigation and energy-related cost considerations.
+1. The user provides the rover's starting and destination coordinates.
+2. The backend maps the coordinates to the projected terrain raster.
+3. Terrain elevation and slope information are evaluated.
+4. The navigation algorithm searches for a traversable path.
+5. Rover energy requirements are estimated using configured physical parameters.
+6. Mission results are returned to the frontend for visualization and analysis.
 
-The route planner uses graph-search algorithms to explore traversable cells in the terrain raster.
+### 2. Rover Route Planner — Navigation Intelligence
 
-### 3. AI Terrain Intelligence — U-Net Model
+The Rover Route Planner is a dedicated navigation module that calculates and compares alternative rover routes across the Jezero Crater DEM.
 
-MARSWALK includes a trained **U-Net semantic segmentation model** for terrain classification.
+Unlike a simple straight-line navigation system, it evaluates possible paths through the terrain grid.
 
-The model was trained using AI4MARS rover-camera image data and is integrated into the backend to generate pixel-level terrain predictions.
+**Four navigation strategies:**
 
-**Terrain classes:**
+| Strategy | Objective |
+|---|---|
+| Shortest Route | Minimize total travel distance |
+| Safest Route | Prefer routes with lower slope exposure |
+| Energy-Efficient Route | Minimize estimated rover energy consumption |
+| Balanced Route | Balance navigation cost and energy-related considerations |
+
+**Key capabilities:**
+
+- Configure starting and destination coordinates.
+- Set a maximum allowed terrain slope.
+- Generate individual rover routes.
+- Compare different navigation strategies.
+- Evaluate terrain slope along candidate routes.
+- Avoid invalid diagonal corner-cutting movements.
+- Compare route distance and estimated energy consumption.
+- Visualize alternative routes on the terrain map.
+
+**Navigation algorithms:**
+
+- A* Search for heuristic-based route exploration.
+- Dijkstra's Algorithm for cumulative-cost path exploration.
+- Eight-direction grid connectivity for rover movement.
+- Configurable terrain-based traversal constraints.
+
+The route comparison engine helps users understand the trade-offs between distance, terrain safety, and estimated energy consumption.
+
+### 3. AI Terrain Intelligence — U-Net Semantic Segmentation
+
+MARSWALK includes a trained U-Net deep-learning model for pixel-level terrain classification of rover-camera images.
+
+The model was trained using AI4MARS rover-camera image data and integrated into the FastAPI backend for image prediction.
+
+**Terrain classification categories:**
 
 | Class ID | Terrain Category |
 |---|---|
@@ -58,103 +100,156 @@ The model was trained using AI4MARS rover-camera image data and is integrated in
 | 2 | Sand |
 | 3 | Big Rock |
 
-**What users can do:**
+**Key capabilities:**
 
-- Submit a rover-camera image for analysis.
-- Generate a pixel-level terrain segmentation mask.
-- Identify different terrain categories within an image.
-- Explore the predicted terrain distribution.
-- Use the classification output as additional terrain intelligence.
+- Upload a rover-camera image.
+- Run image inference using the trained U-Net model.
+- Generate a pixel-level segmentation mask.
+- Identify different terrain categories.
+- Visualize the predicted segmentation results.
+- Explore terrain composition through AI-generated classification output.
 
-**Important:** The U-Net model was trained using AI4MARS rover-camera imagery. Its predictions should not be interpreted as validated classification of Jezero Crater orbital imagery or as a flight-certified rover navigation system.
+**Model evaluation:**
 
-### 4. Gemini AI Mission Explanation
+The current model achieved the following results on the expert test dataset:
 
-MARSWALK integrates Google's Gemini API to provide natural-language explanations of mission and navigation results.
+| Evaluation Metric | Result |
+|---|---:|
+| Pixel Accuracy | 92.95% |
+| Mean Intersection over Union (mIoU) | 66.43% |
 
-The AI explanation layer can:
+These metrics reflect the current model's evaluation results. Individual class performance varies, and the Big Rock class has significantly lower IoU than the other classes.
 
-- Summarize mission-planning results.
-- Explain route comparison outputs.
-- Present technical findings in a more understandable format.
-- Provide supporting mission briefings.
-
-**Architectural principle:** Numerical terrain calculations, pathfinding, and energy estimates are performed by the backend. Gemini is used to explain structured results rather than replace deterministic calculations.
+**Important:** The U-Net model was trained using AI4MARS rover-camera imagery. Its predictions are experimental and should not be treated as validated classification of Jezero orbital imagery or as a flight-certified rover navigation system.
 
 ---
 
 ## 🏛️ System Architecture
 
-MARSWALK follows a frontend-backend architecture that separates user interaction, numerical processing, AI inference, and language-model explanations.
+MARSWALK follows a frontend-backend architecture that separates user interaction, deterministic terrain and navigation calculations, deep-learning inference, and generative AI explanations.
 
 ```text
-                    ┌──────────────────────────────┐
-                    │       React Frontend         │
-                    │                              │
-                    │  Mission Planner             │
-                    │  Rover Route Planner         │
-                    │  AI Terrain Intelligence     │
-                    │  Interactive Dashboard       │
-                    └──────────────┬───────────────┘
+                   ┌───────────────────────────────┐
+                   │        React Frontend         │
+                   │                               │
+                   │       Mission Planner         │
+                   │      Rover Route Planner      │
+                   │    AI Terrain Intelligence    │
+                   │       Interactive Map         │
+                   │       Mission Dashboard       │
+                   └───────────────┬───────────────┘
                                    │
-                              REST API
+                                REST API
                                    │
                                    ▼
-                    ┌──────────────────────────────┐
-                    │       FastAPI Backend        │
-                    │                              │
-                    │  Mission Planning            │
-                    │  Raster Processing           │
-                    │  Route Comparison             │
-                    │  Rover Energy Estimation      │
-                    │  U-Net Model Inference        │
-                    │  Gemini Integration           │
-                    └──────────────┬───────────────┘
+                   ┌───────────────────────────────┐
+                   │        FastAPI Backend        │
+                   │                               │
+                   │       Mission Service         │
+                   │       Raster Service          │
+                   │       Routing Service         │
+                   │       Rover Energy Service    │
+                   │       U-Net AI Service        │
+                   │       Gemini Integration      │
+                   └───────────────┬───────────────┘
                                    │
              ┌─────────────────────┼─────────────────────┐
              │                     │                     │
              ▼                     ▼                     ▼
    ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │ Terrain Analysis │  │ Navigation Engine│  │ AI Intelligence  │
+   │ Terrain Engine   │  │ Navigation Engine│  │ AI Engine        │
    │                  │  │                  │  │                  │
-   │ DEM Processing   │  │ A* Search        │  │ Trained U-Net    │
-   │ Slope Analysis   │  │ Dijkstra         │  │ Image Prediction │
-   │ Roughness        │  │ Route Comparison │  │ Segmentation     │
+   │ Jezero DEM       │  │ A* Search        │  │ Trained U-Net    │
+   │ Elevation        │  │ Dijkstra         │  │ Image Inference  │
+   │ Slope Analysis   │  │ Route Comparison │  │ Segmentation     │
+   │ Roughness        │  │ Traversability   │  │ Terrain Classes  │
    └──────────────────┘  └──────────────────┘  └──────────────────┘
                                    │
                                    ▼
-                    ┌──────────────────────────────┐
-                    │       External AI API        │
-                    │         Google Gemini        │
-                    │     Mission Explanations     │
-                    └──────────────────────────────┘
+                   ┌───────────────────────────────┐
+                   │      Google Gemini API       │
+                   │                               │
+                   │     Mission Explanations     │
+                   │     Navigation Briefings     │
+                   └───────────────────────────────┘
 ```
 
-### Main Architectural Components
+### Architectural Principles
 
-**1. Frontend — React and Vite**
+**1. Deterministic Navigation and Terrain Processing**
 
-Provides the interactive mission-control dashboard, navigation interfaces, map visualization, route configuration, AI image analysis, and mission reports.
+Terrain processing, route generation, and energy estimation are handled by Python backend services. These calculations do not depend on generative AI.
 
-**2. Backend — FastAPI**
+**2. Independent AI Terrain Classification**
 
-Processes API requests and coordinates terrain analysis, mission planning, route generation, rover energy estimation, and AI inference.
+The U-Net model performs image-based semantic segmentation independently of the DEM-based route-planning engine.
 
-**3. Terrain Processing Engine**
+**3. AI-Assisted Explanations**
 
-Uses DEM raster data to calculate terrain characteristics such as slope and roughness for navigation analysis.
+Gemini receives structured backend results and generates human-readable mission and navigation explanations. It does not replace the numerical pathfinding or energy calculations.
 
-**4. Navigation Engine**
+---
 
-Uses graph-search algorithms to calculate and compare rover routes while considering configured terrain constraints.
+## 🧮 Algorithms and Engineering Models
 
-**5. U-Net AI Model**
+### 1. DEM-Based Terrain Processing
 
-Performs semantic segmentation of rover-camera images to identify terrain categories at pixel level.
+MARSWALK uses processed Jezero Crater terrain raster data.
 
-**6. Gemini Integration**
+The terrain service derives:
 
-Generates natural-language explanations from structured backend results.
+- Elevation information.
+- Terrain slope maps.
+- Local terrain roughness maps.
+- Terrain-based navigation constraints.
+
+The slope and roughness calculations provide additional information about the terrain surface for navigation analysis.
+
+### 2. Geographic Coordinate Mapping
+
+The mission and route-planning systems use projected Jezero Crater raster data.
+
+The navigation workflow maps user-provided geographic coordinates into corresponding raster/grid positions before performing route calculations.
+
+This allows the pathfinding engine to operate on actual terrain-grid cells rather than arbitrary map coordinates.
+
+### 3. A* Search Algorithm
+
+A* is used for heuristic-based pathfinding.
+
+It evaluates possible grid movements using accumulated path cost and a heuristic estimate of the remaining distance.
+
+The algorithm supports terrain-aware navigation cost evaluation.
+
+### 4. Dijkstra's Algorithm
+
+Dijkstra's algorithm evaluates cumulative movement costs without relying on a heuristic estimate.
+
+It provides an alternative graph-search approach for route calculation and comparison.
+
+### 5. Rover Traversability
+
+The navigation engine evaluates terrain cells against a configurable maximum allowed slope.
+
+It uses eight-direction grid connectivity and prevents diagonal corner-cutting through blocked neighboring cells.
+
+### 6. Rover Energy Estimation
+
+The rover energy service estimates energy requirements using configurable rover and terrain parameters.
+
+The model considers:
+
+- Rover mass (kg).
+- Baseline power consumption (W).
+- Rolling resistance coefficient.
+- Drivetrain efficiency.
+- Terrain slope.
+- Battery capacity.
+- Battery safety reserve.
+
+The energy estimates support mission evaluation and comparison between alternative routes.
+
+These calculations are simplified engineering estimates and are not validated flight-dynamics or NASA rover power-system simulations.
 
 ---
 
@@ -162,59 +257,17 @@ Generates natural-language explanations from structured backend results.
 
 | Component | Technologies |
 |---|---|
-| Frontend | React.js, Vite, Tailwind CSS |
+| Frontend | React.js, Vite |
+| Styling | Tailwind CSS |
 | Mapping | Leaflet |
 | Backend | Python, FastAPI, Uvicorn |
 | Numerical Processing | NumPy |
 | Geospatial Processing | Rasterio, GDAL |
-| Pathfinding | A* Search, Dijkstra Algorithm |
+| Pathfinding | A*, Dijkstra |
 | Deep Learning | PyTorch, U-Net |
-| AI Integration | Google Gemini API, google-genai |
-| Image Processing | Pillow, OpenCV (where configured) |
-
----
-
-## 🧮 Algorithms and Analytical Models
-
-### 1. Pathfinding Algorithms
-
-**A* Search Algorithm**
-
-Uses a heuristic-based graph-search approach to explore possible rover paths through the terrain grid.
-
-**Dijkstra's Algorithm**
-
-Uses cumulative path costs to explore terrain nodes and calculate routes without heuristic guidance.
-
-### 2. Terrain Analysis
-
-The terrain processing engine uses DEM raster data to derive navigation-related information.
-
-- Elevation information.
-- Terrain slope estimation.
-- Local terrain roughness estimation.
-- Slope-based traversability constraints.
-
-### 3. Rover Energy Estimation
-
-The energy estimation service considers configured rover and terrain parameters, including:
-
-- Rover mass (kg).
-- Baseline power consumption (W).
-- Rolling resistance coefficient.
-- Drivetrain efficiency.
-- Terrain slope.
-- Battery capacity and safety reserve.
-
-These calculations provide estimated energy requirements for comparing mission alternatives. They are simplified engineering estimates, not validated flight-dynamics predictions.
-
-### 4. U-Net Semantic Segmentation
-
-The AI Terrain Intelligence module uses a U-Net convolutional neural network trained on AI4MARS image data.
-
-The network performs pixel-level classification and generates a segmentation mask containing the predicted terrain categories.
-
-The model is used for rover-camera image analysis and is separate from the DEM-based navigation engine.
+| Image Processing | Pillow, OpenCV where configured |
+| Generative AI | Google Gemini API |
+| API Communication | REST API |
 
 ---
 
@@ -272,15 +325,13 @@ MARSWALK/
 └── README.md
 ```
 
-*Note: This is a representative structure. Additional configuration files, model weights, and datasets may be present in the actual repository.*
+*Note: This is a representative structure. Actual files, model weights, configuration files, and datasets may differ.*
 
 ---
 
 ## ⚙️ Installation and Local Setup
 
 ### Prerequisites
-
-Install the following:
 
 - Python 3.10 or newer.
 - Node.js 18 or newer.
@@ -296,19 +347,19 @@ cd MarsWalk
 
 ### 2. Backend Setup
 
-Navigate to the backend directory:
+Navigate to the backend:
 
 ```bash
 cd backend
 ```
 
-Create a virtual environment:
+Create a Python virtual environment:
 
 ```bash
 python -m venv venv
 ```
 
-Activate the environment.
+Activate it.
 
 **Windows CMD:**
 
@@ -322,7 +373,7 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-Install backend dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -336,11 +387,11 @@ Create a `.env` file inside the backend directory:
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Replace the placeholder with your own Gemini API key.
+Replace the placeholder with your actual Gemini API key.
 
-Never commit your actual `.env` file or API credentials to GitHub.
+Never commit your real API key or `.env` file to GitHub.
 
-### 4. Start the Backend Server
+### 4. Start the Backend
 
 Run:
 
@@ -348,13 +399,13 @@ Run:
 uvicorn app.main:app --reload --port 8001
 ```
 
-The backend will run at:
+Backend URL:
 
 ```text
 http://127.0.0.1:8001
 ```
 
-FastAPI interactive API documentation:
+Interactive API documentation:
 
 ```text
 http://127.0.0.1:8001/docs
@@ -362,7 +413,7 @@ http://127.0.0.1:8001/docs
 
 ### 5. Frontend Setup
 
-Open a new terminal and navigate to the frontend directory:
+Open a new terminal and navigate to the frontend:
 
 ```bash
 cd frontend
@@ -374,19 +425,19 @@ Install dependencies:
 npm install
 ```
 
-Start the Vite development server:
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-The frontend will normally run at:
+Frontend URL:
 
 ```text
 http://localhost:5173
 ```
 
-**Important:** Ensure that the frontend API configuration points to the backend at port `8001` during local development.
+Make sure the frontend API configuration points to the backend running on port `8001`.
 
 ---
 
@@ -394,49 +445,53 @@ http://localhost:5173
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/rover/mission/plan` | POST | Generate a rover mission plan |
+| `/api/rover/mission/plan` | POST | Generate DEM-based rover mission plans |
 | `/api/rover/routes/compare` | POST | Compare rover navigation strategies |
 | `/api/gemini/explain` | POST | Generate AI-assisted explanations |
 | `/api/terrain-ai/predict` | POST | Perform U-Net terrain image prediction |
 
-For complete request and response schemas, start the backend and visit:
+For complete request and response schemas, run the backend and visit:
 
 `http://127.0.0.1:8001/docs`
 
 ---
 
-## 🌍 Data Sources and Model Information
+## 🌍 Geospatial Data and AI Training
 
-**Geospatial Data**
+### Jezero Crater Terrain Data
 
-MARSWALK uses processed Jezero Crater terrain raster data, including:
+MARSWALK uses processed Jezero Crater raster datasets:
 
-- Digital Elevation Model (DEM).
-- Orthomosaic raster imagery.
+- `jezero_dem_mars_projected.tif`
+- `jezero_ortho_mars_projected.tif`
 
-These datasets support terrain visualization, slope and roughness analysis, and rover route planning.
+The DEM supports elevation, slope, roughness, and navigation analysis.
 
-**AI Training Data**
+The orthomosaic provides corresponding terrain imagery for map visualization.
 
-The U-Net terrain segmentation model was trained using AI4MARS rover-camera imagery.
+### U-Net Training Data
 
-The model's predictions are intended for experimental terrain classification and should be interpreted within the limitations of its training data and validation performance.
+The U-Net model was trained using AI4MARS rover-camera image data.
+
+The model generates pixel-level segmentation predictions for four terrain categories.
+
+The model's performance should be interpreted according to its training data, test dataset, and class-specific evaluation metrics.
 
 ---
 
 ## 🚀 Deployment
 
-MARSWALK can be deployed using separate frontend and backend services.
+MARSWALK is designed to support separate frontend and backend deployment.
 
-A typical deployment configuration is:
+A typical deployment configuration includes:
 
-- Frontend: Static hosting for the React/Vite application.
-- Backend: Python-compatible application hosting or Docker-based hosting.
-- Large datasets and trained model weights: Appropriate persistent or external storage.
+- **Frontend:** Static hosting for React and Vite.
+- **Backend:** Python application hosting or Docker-based hosting.
+- **Data and model weights:** Persistent or external storage appropriate for large raster datasets and trained models.
 
-When deploying, update the frontend API configuration to point to the publicly accessible backend URL.
+For deployment, update the frontend API configuration to point to the publicly accessible backend URL.
 
-Keep API keys and other secrets in the deployment platform's environment-variable settings.
+Configure Gemini API credentials using the deployment platform's environment variables.
 
 ---
 
@@ -444,7 +499,7 @@ Keep API keys and other secrets in the deployment platform's environment-variabl
 
 Copyright © 2026 Asaduzzaman Shihab. All Rights Reserved.
 
-Developed specifically for the NASA Space Apps Challenge.
+Developed for the NASA Space Apps Challenge.
 
 No part of this software, including its architecture, code, and analytical models, may be reproduced, distributed, or modified without explicit written permission from the author.
 
