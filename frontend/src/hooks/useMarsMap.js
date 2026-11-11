@@ -1,8 +1,11 @@
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 const RASTER_WIDTH = 3900;
 const RASTER_HEIGHT = 4103;
+
+// The projected DEM has a 1 metre pixel resolution.
+const METRES_PER_PIXEL = 1;
 
 function useMarsMap() {
   const [startPoint, setStartPoint] = useState(null);
@@ -54,25 +57,52 @@ function useMarsMap() {
     setSelectionMode("start");
   }, []);
 
-  const selectStartPoint = useCallback((point) => {
-    setStartPoint(point);
+  const selectStartPoint = useCallback(() => {
+    setSelectionMode("start");
   }, []);
 
-  const selectDestinationPoint = useCallback((point) => {
-    setDestinationPoint(point);
+  const selectDestinationPoint = useCallback(() => {
+    setSelectionMode("destination");
   }, []);
+
+  // Keep the original start point and allow the user
+  // to choose a different destination.
+  const reselectDestination = useCallback(() => {
+    setDestinationPoint(null);
+    setSelectionMode("destination");
+  }, []);
+
+  // Approximate straight-line distance, not routed distance.
+  const straightLineDistanceMeters = useMemo(() => {
+    if (!startPoint || !destinationPoint) {
+      return null;
+    }
+
+    const pixelDistance = Math.hypot(
+      destinationPoint.x - startPoint.x,
+      destinationPoint.y - startPoint.y
+    );
+
+    return pixelDistance * METRES_PER_PIXEL;
+  }, [startPoint, destinationPoint]);
 
   return {
     startPoint,
     destinationPoint,
     selectionMode,
+
     handleMapClick,
     clearStartPoint,
     clearDestinationPoint,
     resetPoints,
+
     selectStartPoint,
     selectDestinationPoint,
+    reselectDestination,
     setSelectionMode,
+
+    straightLineDistanceMeters,
+
     hasBothPoints: Boolean(startPoint && destinationPoint),
   };
 }

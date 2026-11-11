@@ -31,10 +31,10 @@ CLASS_NAMES = {
 }
 
 CLASS_COLORS = {
-    0: (216, 179, 101),  # Soil
-    1: (91, 141, 184),   # Bedrock
-    2: (230, 199, 90),   # Sand
-    3: (217, 83, 79)     # Big Rock
+    0: (216, 179, 101),  # Soil - golden
+    1: (91, 141, 184),   # Bedrock - blue
+    2: (46, 157, 114),   # Sand - green
+    3: (217, 83, 79),    # Big Rock - red
 }
 
 

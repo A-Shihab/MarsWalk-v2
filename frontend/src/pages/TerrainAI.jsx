@@ -16,8 +16,8 @@ import {
 import { predictTerrain } from "../services/api.js";
 
 // --------------------------------------------------
-// TERRAIN CLASS CONFIGURATION
-// Big Rock intentionally excluded from frontend display.
+// FOUR TERRAIN CLASSES
+// These colors will be synchronized with the backend.
 // --------------------------------------------------
 
 const TERRAIN_CLASSES = [
@@ -34,7 +34,12 @@ const TERRAIN_CLASSES = [
   {
     id: 2,
     name: "Sand",
-    color: "#E6C75A",
+    color: "#2E9D72",
+  },
+  {
+    id: 3,
+    name: "Big Rock",
+    color: "#D9534F",
   },
 ];
 
@@ -57,11 +62,27 @@ function TerrainAI() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Display only Soil, Bedrock and Sand.
-  const visibleClasses =
-    prediction?.classes?.filter(
-      (terrain) => Number(terrain.class_id) !== 3
-    ) || [];
+  // Display all four terrain classes, including Big Rock.
+  const visibleClasses = prediction?.classes || [];
+
+  // Use backend-provided RGB colors when available.
+  // Otherwise, use the frontend's standard color palette.
+  const getTerrainColor = (classId) => {
+    const rgb = prediction?.class_colors?.[String(classId)];
+
+    if (
+      Array.isArray(rgb) &&
+      rgb.length >= 3
+    ) {
+      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+
+    return (
+      TERRAIN_CLASSES.find(
+        (terrain) => terrain.id === Number(classId)
+      )?.color || "#64748b"
+    );
+  };
 
   // Clean up temporary image preview URLs.
   useEffect(() => {
@@ -178,8 +199,8 @@ function TerrainAI() {
 
           <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400 sm:text-base">
             Analyze Mars terrain imagery using the MARSWALK
-            U-Net deep learning model. Identify soil, bedrock
-            and sand regions through semantic segmentation.
+            U-Net deep learning model. Identify soil, bedrock,
+            sand and big rock regions through semantic segmentation.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -191,7 +212,7 @@ function TerrainAI() {
 
             <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
               <ScanSearch size={14} />
-              3 DISPLAYED TERRAIN CLASSES
+              4 TERRAIN CLASSES
             </div>
 
           </div>
@@ -377,9 +398,7 @@ function TerrainAI() {
               </p>
 
               <p className="mt-3 text-3xl font-bold text-mars-400">
-                {formatConfidence(
-                  prediction.overall_mean_confidence
-                )}
+                {formatConfidence(prediction.overall_mean_confidence)}
               </p>
 
               <p className="mt-2 text-xs text-slate-500">
@@ -468,18 +487,14 @@ function TerrainAI() {
 
                 <div className="flex min-h-[220px] items-center justify-center bg-black/20 p-3">
                   <img
-                    src={getImageSource(
-                      prediction.segmentation_base64
-                    )}
+                    src={getImageSource(prediction.segmentation_base64)}
                     alt="Terrain segmentation map"
                     className="max-h-[300px] max-w-full rounded-lg object-contain"
                   />
                 </div>
 
                 <a
-                  href={getImageSource(
-                    prediction.segmentation_base64
-                  )}
+                  href={getImageSource(prediction.segmentation_base64)}
                   download="marswalk_segmentation.png"
                   className="block border-t border-white/10 p-3 text-center text-xs font-medium text-mars-400 hover:bg-white/5"
                 >
@@ -504,18 +519,14 @@ function TerrainAI() {
 
                 <div className="flex min-h-[220px] items-center justify-center bg-black/20 p-3">
                   <img
-                    src={getImageSource(
-                      prediction.overlay_base64
-                    )}
+                    src={getImageSource(prediction.overlay_base64)}
                     alt="Terrain segmentation overlay"
                     className="max-h-[300px] max-w-full rounded-lg object-contain"
                   />
                 </div>
 
                 <a
-                  href={getImageSource(
-                    prediction.overlay_base64
-                  )}
+                  href={getImageSource(prediction.overlay_base64)}
                   download="marswalk_overlay.png"
                   className="block border-t border-white/10 p-3 text-center text-xs font-medium text-mars-400 hover:bg-white/5"
                 >
@@ -527,7 +538,7 @@ function TerrainAI() {
             </div>
           </div>
 
-          {/* TERRAIN LEGEND AND DISTRIBUTION */}
+          {/* FOUR-CLASS TERRAIN LEGEND AND DISTRIBUTION */}
 
           <div className="rounded-xl border border-white/10 bg-space-900 p-5">
 
@@ -535,7 +546,9 @@ function TerrainAI() {
               Terrain Class Distribution
             </h3>
 
-            <div className="mb-5 flex flex-wrap gap-5">
+            {/* FOUR-CLASS LEGEND */}
+
+            <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
 
               {TERRAIN_CLASSES.map((terrain) => (
                 <div
@@ -543,9 +556,9 @@ function TerrainAI() {
                   className="flex items-center gap-2 text-sm text-slate-300"
                 >
                   <span
-                    className="h-3 w-3 rounded-sm"
+                    className="h-4 w-4 shrink-0 rounded-sm"
                     style={{
-                      backgroundColor: terrain.color,
+                      backgroundColor: getTerrainColor(terrain.id),
                     }}
                   />
 
@@ -555,90 +568,71 @@ function TerrainAI() {
 
             </div>
 
-            {/* Distribution bar: only displayed classes */}
+            {/* FOUR-CLASS DISTRIBUTION BAR */}
 
-            <div className="flex h-5 w-full overflow-hidden rounded-full bg-white/5">
+            <div className="flex h-6 w-full overflow-hidden rounded-full bg-white/5">
 
-              {visibleClasses.map((terrain) => {
-                const classConfig = TERRAIN_CLASSES.find(
-                  (item) => item.id === Number(terrain.class_id)
-                );
-
-                return (
-                  <div
-                    key={terrain.class_id}
-                    title={`${terrain.class_name}: ${formatPercentage(terrain.percentage)}`}
-                    style={{
-                      width: `${Math.max(
-                        0,
-                        Math.min(100, Number(terrain.percentage))
-                      )}%`,
-                      backgroundColor: classConfig?.color || "#64748b",
-                    }}
-                  />
-                );
-              })}
+              {visibleClasses.map((terrain) => (
+                <div
+                  key={terrain.class_id}
+                  title={`${terrain.class_name}: ${formatPercentage(terrain.percentage)}`}
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, Number(terrain.percentage))
+                    )}%`,
+                    backgroundColor: getTerrainColor(terrain.class_id),
+                  }}
+                />
+              ))}
 
             </div>
 
-            <p className="mt-2 text-xs text-slate-500">
-              Only Soil, Bedrock and Sand are displayed. The
-              distribution percentages retain their original
-              model-reported values.
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              All four model-predicted terrain classes are displayed.
+              Distribution percentages retain their original model-reported values.
             </p>
 
-            {/* CLASS STATISTICS */}
+            {/* FOUR-CLASS STATISTICS */}
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
-              {visibleClasses.map((terrain) => {
-                const classConfig = TERRAIN_CLASSES.find(
-                  (item) => item.id === Number(terrain.class_id)
-                );
+              {visibleClasses.map((terrain) => (
+                <div
+                  key={terrain.class_id}
+                  className="rounded-lg border border-white/10 bg-white/[0.02] p-4"
+                >
 
-                return (
-                  <div
-                    key={terrain.class_id}
-                    className="rounded-lg border border-white/10 bg-white/[0.02] p-4"
-                  >
+                  <div className="flex items-center gap-2">
 
-                    <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-sm"
+                      style={{
+                        backgroundColor: getTerrainColor(terrain.class_id),
+                      }}
+                    />
 
-                      <span
-                        className="h-3 w-3 rounded-sm"
-                        style={{
-                          backgroundColor:
-                            classConfig?.color || "#64748b",
-                        }}
-                      />
-
-                      <span className="text-sm font-medium text-slate-300">
-                        {terrain.class_name}
-                      </span>
-
-                    </div>
-
-                    <p className="mt-3 text-2xl font-bold text-white">
-                      {formatPercentage(terrain.percentage)}
-                    </p>
-
-                    <p className="mt-2 text-xs text-slate-500">
-                      {Number(
-                        terrain.pixel_count
-                      ).toLocaleString()}{" "}
-                      pixels
-                    </p>
-
-                    <p className="mt-1 text-xs text-slate-500">
-                      Mean confidence:{" "}
-                      {formatConfidence(
-                        terrain.mean_confidence
-                      )}
-                    </p>
+                    <span className="text-sm font-medium text-slate-300">
+                      {terrain.class_name}
+                    </span>
 
                   </div>
-                );
-              })}
+
+                  <p className="mt-3 text-2xl font-bold text-white">
+                    {formatPercentage(terrain.percentage)}
+                  </p>
+
+                  <p className="mt-2 text-xs text-slate-500">
+                    {Number(terrain.pixel_count).toLocaleString()} pixels
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Mean confidence:{" "}
+                    {formatConfidence(terrain.mean_confidence)}
+                  </p>
+
+                </div>
+              ))}
 
             </div>
           </div>
@@ -686,7 +680,7 @@ function TerrainAI() {
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
             Select a terrain image and click Predict Terrain.
             Your trained U-Net model will generate a segmentation
-            map and terrain statistics.
+            map and terrain statistics for all four terrain classes.
           </p>
 
         </div>

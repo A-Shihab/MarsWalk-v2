@@ -538,6 +538,127 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
               </button>
             </div>
 
+            {/* ======================================
+                IMPORTANT MAP SELECTION NOTICE
+            ====================================== */}
+
+            <div className="mb-5 rounded-xl border-2 border-red-500/60 bg-red-500/10 p-4 shadow-lg shadow-red-950/20">
+
+              <div className="flex items-start gap-3">
+
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500/20">
+                  <span className="text-xl">⚠️</span>
+                </div>
+
+                <div className="min-w-0">
+
+                  <h3 className="text-base font-extrabold uppercase tracking-wide text-red-400">
+                    Important — Read Before Selecting Mission Points
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-relaxed text-slate-200">
+                    Choose an appropriate map zoom level before
+                    selecting your starting point and destination.
+                    For faster route calculation, we recommend
+                    selecting locations within a relatively short
+                    operational range.
+                  </p>
+
+                </div>
+
+              </div>
+
+              {/* ZOOM LEVEL GUIDE */}
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+
+                <div className="rounded-lg border border-orange-400/30 bg-orange-400/10 p-3">
+                  <p className="font-bold text-orange-300">
+                    DETAIL
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                    Recommended for selecting nearby mission locations.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-green-400/30 bg-green-400/10 p-3">
+                  <p className="font-bold text-green-300">
+                    CLOSE
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                    Useful for precise selection of start and destination points.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-slate-950/60 p-3">
+                  <p className="font-bold text-slate-200">
+                    OVERVIEW
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                    Best for inspecting the wider terrain before choosing locations.
+                  </p>
+                </div>
+
+              </div>
+
+              {/* WHY SHORTER DISTANCES ARE RECOMMENDED */}
+
+              <div className="mt-4 rounded-lg border border-red-500/30 bg-red-950/30 p-3">
+
+                <p className="font-bold text-red-300">
+                  Why should you avoid very long-distance selections?
+                </p>
+
+                <ul className="mt-2 list-inside list-disc space-y-2 text-sm leading-relaxed text-slate-300">
+
+                  <li>
+                    A* and Dijkstra explore terrain pixels to find a traversable route.
+                  </li>
+
+                  <li>
+                    Longer distances can require exploring many more terrain nodes.
+                  </li>
+
+                  <li>
+                    A calculation may take more than two minutes depending on terrain complexity and the selected algorithm.
+                  </li>
+
+                  <li>
+                    The current backend has a search limit of 20,000 node expansions.
+                  </li>
+
+                </ul>
+
+                <p className="mt-3 text-sm font-semibold leading-relaxed text-red-300">
+                  Recommendation: Select a nearby destination to keep
+                  route calculation practical and responsive.
+                </p>
+
+              </div>
+
+              {/* ZOOM CLARIFICATION */}
+
+              <div className="mt-3 flex items-start gap-2">
+
+                <span className="text-red-400">ⓘ</span>
+
+                <p className="text-xs leading-relaxed text-slate-400">
+                  Changing zoom does not reduce the distance between
+                  selected coordinates. If your destination is too
+                  far away, zoom in and select a new, closer destination.
+                </p>
+
+              </div>
+
+            </div>
+
+            {/* ======================================
+                MAP POINT SELECTION
+            ====================================== */}
+
             <div className="mb-4 grid grid-cols-2 gap-3">
 
               <button
@@ -582,6 +703,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
             </div>
 
+            {/* SELECTED COORDINATES */}
+
             <div className="mt-5 grid gap-3 md:grid-cols-2">
 
               <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-4">
@@ -611,6 +734,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
             </div>
 
           </div>
+
+          {/* ROUTE CONFIGURATION */}
 
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
 
@@ -665,6 +790,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
           </div>
 
         </section>
+
+        {/* ROVER SPECIFICATIONS */}
 
         <aside className="space-y-5">
 
@@ -763,6 +890,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
           </div>
 
+          {/* CALCULATE MISSION */}
+
           <button
             type="button"
             onClick={handlePlanMission}
@@ -791,9 +920,15 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
       </div>
 
+      {/* ============================================
+          MISSION RESULTS
+      ============================================ */}
+
       {missionResult && energy && (
 
         <section className="mx-auto mt-8 max-w-7xl space-y-6">
+
+          {/* MISSION FEASIBILITY */}
 
           <div
             className={`rounded-2xl border p-6 ${
@@ -839,11 +974,15 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
           </div>
 
+          {/* GEMINI EXPLANATION */}
+
           <GeminiReport
             explanation={geminiExplanation}
             loading={geminiLoading}
             error={geminiError}
           />
+
+          {/* MISSION OVERVIEW */}
 
           <div>
             <h2 className="mb-4 text-xl font-bold">
@@ -901,6 +1040,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
             </div>
           </div>
+
+          {/* OUTBOUND AND RETURN JOURNEYS */}
 
           <div className="grid gap-5 lg:grid-cols-2">
 
@@ -988,6 +1129,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
           </div>
 
+          {/* MISSION SAFETY CHECKS */}
+
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
 
             <h3 className="mb-4 text-lg font-bold">
@@ -1051,6 +1194,8 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
             </div>
 
           </div>
+
+          {/* ENGINEERING MODEL ASSUMPTIONS */}
 
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
 

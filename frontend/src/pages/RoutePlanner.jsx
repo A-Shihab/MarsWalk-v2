@@ -26,7 +26,7 @@ const INITIAL_ROVER = {
 };
 
 // --------------------------------------------------
-// ROUTE STRATEGY LABELS
+// STRATEGY CONFIGURATION
 // --------------------------------------------------
 
 const STRATEGY_LABELS = {
@@ -36,15 +36,18 @@ const STRATEGY_LABELS = {
   balanced: "Balanced Route",
 };
 
+const STRATEGY_COLORS = {
+  shortest: "#38bdf8",
+  safest: "#22c55e",
+  energy_efficient: "#c084fc",
+  balanced: "#f97316",
+};
+
+const DEFAULT_ROUTE_COLOR = "#facc15";
+
 // --------------------------------------------------
 // HELPERS
 // --------------------------------------------------
-
-function getNumber(value, fallback = 0) {
-  const number = Number(value);
-
-  return Number.isFinite(number) ? number : fallback;
-}
 
 function getOptionalNumber(value) {
   if (value === null || value === undefined || value === "") {
@@ -52,16 +55,13 @@ function getOptionalNumber(value) {
   }
 
   const number = Number(value);
-
   return Number.isFinite(number) ? number : null;
 }
 
 function formatNumber(value, decimals = 2) {
   const number = getOptionalNumber(value);
 
-  return number !== null
-    ? number.toFixed(decimals)
-    : "N/A";
+  return number !== null ? number.toFixed(decimals) : "N/A";
 }
 
 function getCandidateEnergy(candidate) {
@@ -105,21 +105,12 @@ function getCandidateTotalDistance(candidate) {
     roundTrip.total_distance_m
   );
 
-  if (backendTotal !== null) {
-    return backendTotal;
-  }
+  if (backendTotal !== null) return backendTotal;
 
-  const outbound = getOptionalNumber(
-    candidate?.outbound_distance_m
-  );
+  const outbound = getOptionalNumber(candidate?.outbound_distance_m);
+  const returning = getOptionalNumber(candidate?.return_distance_m);
 
-  const returning = getOptionalNumber(
-    candidate?.return_distance_m
-  );
-
-  if (outbound === null && returning === null) {
-    return null;
-  }
+  if (outbound === null && returning === null) return null;
 
   return (outbound || 0) + (returning || 0);
 }
@@ -143,9 +134,7 @@ function getTravelTimeSeconds(segment) {
 
   const hours = getOptionalNumber(segment?.total_time_hours);
 
-  if (hours !== null) return hours * 3600;
-
-  return null;
+  return hours !== null ? hours * 3600 : null;
 }
 
 function getCombinedRoutePoints(candidate) {
@@ -155,7 +144,6 @@ function getCombinedRoutePoints(candidate) {
   const returning = candidate.return_route_pixels || [];
 
   if (!outbound.length) return returning;
-
   if (!returning.length) return outbound;
 
   const lastOutbound = outbound[outbound.length - 1];
@@ -172,16 +160,10 @@ function getCombinedRoutePoints(candidate) {
 }
 
 // --------------------------------------------------
-// NUMBER INPUT
+// INPUT COMPONENTS
 // --------------------------------------------------
 
-function NumberField({
-  label,
-  name,
-  value,
-  onChange,
-  step = "any",
-}) {
+function NumberField({ label, name, value, onChange, step = "any" }) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm text-slate-300">
@@ -201,12 +183,8 @@ function NumberField({
   );
 }
 
-// --------------------------------------------------
-// RESULT VALUE
-// --------------------------------------------------
-
 function ResultValue({ label, value, unit = "" }) {
-  const available = value !== undefined && value !== null;
+  const available = value !== null && value !== undefined;
 
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
@@ -237,6 +215,9 @@ function RouteCandidateCard({
 
   const feasible = candidate.feasible === true;
 
+  const routeColor =
+    STRATEGY_COLORS[candidate.strategy] || DEFAULT_ROUTE_COLOR;
+
   return (
     <div
       className={`rounded-xl border p-5 ${
@@ -247,10 +228,17 @@ function RouteCandidateCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold text-white">
-            {STRATEGY_LABELS[candidate.strategy] ||
-              candidate.strategy}
-          </h3>
+          <div className="flex items-center gap-2">
+            <span
+              className="h-3 w-3 rounded-full"
+              style={{ backgroundColor: routeColor }}
+            />
+
+            <h3 className="text-lg font-bold text-white">
+              {STRATEGY_LABELS[candidate.strategy] ||
+                candidate.strategy}
+            </h3>
+          </div>
 
           <p className="mt-1 text-xs text-slate-400">
             Route ID: {candidate.route_id}
@@ -330,7 +318,7 @@ function RouteCandidateCard({
             onClick={() => onSelect(candidate)}
             className="mt-4 w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-orange-400 hover:bg-slate-800"
           >
-            Show This Route on Map
+            Highlight This Route on Map
           </button>
         </>
       )}
@@ -369,7 +357,7 @@ export default function RoutePlanner() {
   const [geminiError, setGeminiError] = useState("");
 
   // ------------------------------------------------
-  // SELECTED CANDIDATE
+  // BACKEND-SELECTED CANDIDATE
   // ------------------------------------------------
 
   const selectedCandidate = useMemo(() => {
@@ -387,11 +375,33 @@ export default function RoutePlanner() {
     );
   }, [result]);
 
+  const activeCandidate = displayedCandidate || selectedCandidate;
+
   // ------------------------------------------------
-  // DISPLAYED ROUTE
+  // ALL ROUTES FOR MAP DISPLAY
   // ------------------------------------------------
 
-  const activeCandidate = displayedCandidate || selectedCandidate;
+  const mapRoutes = useMemo(() => {
+    if (!result?.candidates) return [];
+
+    return result.candidates
+      .filter((candidate) => candidate.status !== "failed")
+      .map((candidate, index) => {
+        const points = getCombinedRoutePoints(candidate);
+
+        return {
+          id: candidate.route_id || `route-${index}`,
+          strategy: candidate.strategy,
+          points,
+          color:
+            STRATEGY_COLORS[candidate.strategy] ||
+            DEFAULT_ROUTE_COLOR,
+          selected:
+            candidate.route_id === activeCandidate?.route_id,
+        };
+      })
+      .filter((route) => route.points.length > 1);
+  }, [result, activeCandidate]);
 
   const routePoints = useMemo(
     () => getCombinedRoutePoints(activeCandidate),
@@ -445,10 +455,7 @@ export default function RoutePlanner() {
 
   function validateRover() {
     for (const [key, value] of Object.entries(rover)) {
-      if (
-        value === "" ||
-        !Number.isFinite(Number(value))
-      ) {
+      if (value === "" || !Number.isFinite(Number(value))) {
         return `Please enter a valid number for ${key}.`;
       }
 
@@ -514,27 +521,17 @@ export default function RoutePlanner() {
           status: candidate.status,
           feasible: candidate.feasible,
           selected: candidate.selected,
-
           outbound_distance_m: getOptionalNumber(
             candidate.outbound_distance_m
           ),
-
           return_distance_m: getOptionalNumber(
             candidate.return_distance_m
           ),
-
           round_trip_distance_m: getCandidateTotalDistance(candidate),
-
           round_trip_energy_wh: getCandidateTotalEnergy(candidate),
-
           maximum_slope_deg: getCandidateMaximumSlope(candidate),
-
           remaining_battery_percent: getCandidateRemainingBattery(candidate),
-
-          selection_score: getOptionalNumber(
-            candidate.selection_score
-          ),
-
+          selection_score: getOptionalNumber(candidate.selection_score),
           recommendation: energy.recommendation ?? null,
           reason: candidate.reason ?? null,
         };
@@ -545,9 +542,7 @@ export default function RoutePlanner() {
           (candidate) =>
             candidate.route_id === data.selected_route_id
         ) ||
-        candidates.find(
-          (candidate) => candidate.selected === true
-        );
+        candidates.find((candidate) => candidate.selected === true);
 
       if (!selected) {
         throw new Error(
@@ -571,31 +566,16 @@ export default function RoutePlanner() {
           ? outboundTime + returnTime
           : getTravelTimeSeconds(selectedRoundTrip);
 
-      // ------------------------------------------------
-      // GEMINI REQUEST VALIDATION FIX
-      // All required numeric fields receive valid numbers.
-      // Unavailable measurements are documented below.
-      // ------------------------------------------------
-
       const routeMetrics = {
-        distance_m: getNumber(selected.outbound_distance_m),
-
+        distance_m: getOptionalNumber(selected.outbound_distance_m) ?? 0,
         mean_slope_deg: 0,
-
-        max_slope_deg: getNumber(selectedSlope),
-
+        max_slope_deg: selectedSlope ?? 0,
         ascent_m: 0,
-
         descent_m: 0,
-
-        estimated_energy_wh: getNumber(
-          selectedOutbound.total_energy_wh
-        ),
-
-        estimated_travel_time_seconds: getNumber(outboundTime),
-
+        estimated_energy_wh:
+          getOptionalNumber(selectedOutbound.total_energy_wh) ?? 0,
+        estimated_travel_time_seconds: outboundTime ?? 0,
         steep_segments: 0,
-
         total_segments: Math.max(
           0,
           (selected.outbound_route_pixels || []).length - 1
@@ -739,14 +719,11 @@ Write a detailed, understandable comparison report with headings and bullet poin
         x: Number(startPoint.x),
         y: Number(startPoint.y),
       },
-
       destination_pixel: {
         x: Number(destinationPoint.x),
         y: Number(destinationPoint.y),
       },
-
       algorithm,
-
       rover: {
         battery_capacity_wh: Number(rover.battery_capacity_wh),
         average_speed_mps: Number(rover.average_speed_mps),
@@ -781,7 +758,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
 
       if (!Array.isArray(data.candidates)) {
         throw new Error(
-          "The comparison response does not contain route candidates. Check that the frontend is using /api/rover/routes/compare."
+          "The comparison response does not contain route candidates. Check the /api/rover/routes/compare endpoint."
         );
       }
 
@@ -838,7 +815,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
 
         <p className="mt-2 max-w-3xl text-slate-400">
           Compare four rover navigation strategies using Jezero Crater
-          terrain data. Evaluate distance, slope risk and energy
+          terrain data. Evaluate distance, slope constraints and energy
           consumption before selecting a mission route.
         </p>
       </div>
@@ -853,7 +830,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Click the map to place your start and destination markers.
+              Choose a selection mode, then click the Jezero map.
             </p>
           </div>
 
@@ -864,6 +841,24 @@ Write a detailed, understandable comparison report with headings and bullet poin
           >
             Clear Both Points
           </button>
+        </div>
+
+        <div className="mb-4 rounded-lg border border-slate-700 bg-slate-950 p-3">
+          <p className="text-xs uppercase tracking-wider text-slate-500">
+            Current Map Selection Mode
+          </p>
+
+          <p
+            className={`mt-1 text-sm font-semibold ${
+              selectionMode === "start"
+                ? "text-green-400"
+                : "text-red-400"
+            }`}
+          >
+            {selectionMode === "start"
+              ? "Select Starting Point"
+              : "Select Destination Point"}
+          </p>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-3">
@@ -892,9 +887,126 @@ Write a detailed, understandable comparison report with headings and bullet poin
           </button>
         </div>
 
+        {/* IMPORTANT MAP SELECTION GUIDANCE */}
+
+        <div className="mb-4 rounded-xl border border-red-500 bg-red-950/30 p-4 sm:p-5">
+
+          <div className="flex items-start gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-500/20 text-lg">
+              ⚠️
+            </span>
+
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wide text-red-400">
+                Important — Read Before Selecting Mission Points
+              </h3>
+
+              <p className="mt-2 text-sm leading-relaxed text-slate-200">
+                Choose an appropriate map zoom level before selecting
+                your starting point and destination. For faster route
+                calculation, we recommend selecting locations within
+                a relatively short operational range.
+              </p>
+            </div>
+          </div>
+
+          {/* THREE MAP ZOOM LEVELS */}
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+
+            <div className="rounded-lg border border-orange-500/50 bg-orange-500/10 p-3">
+              <p className="text-sm font-bold text-orange-400">
+                DETAIL
+              </p>
+
+              <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                Recommended for selecting nearby mission locations
+                with precise point placement.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-3">
+              <p className="text-sm font-bold text-green-400">
+                CLOSE
+              </p>
+
+              <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                Useful for accurately selecting start and destination
+                points across a local area.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-slate-600 bg-slate-950/70 p-3">
+              <p className="text-sm font-bold text-slate-200">
+                OVERVIEW
+              </p>
+
+              <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                Best for inspecting the wider Jezero terrain before
+                choosing mission locations.
+              </p>
+            </div>
+
+          </div>
+
+          {/* WHY LONG DISTANCES ARE NOT RECOMMENDED */}
+
+          <div className="mt-3 rounded-lg border border-red-500/40 bg-red-950/40 p-3 sm:p-4">
+
+            <h4 className="text-sm font-bold text-red-400">
+              Why should you avoid very long-distance selections?
+            </h4>
+
+            <ul className="mt-2 list-disc space-y-2 pl-5 text-xs leading-relaxed text-slate-200">
+              <li>
+                A* and Dijkstra explore terrain pixels to find a
+                traversable route.
+              </li>
+
+              <li>
+                Longer distances can require exploring many more
+                terrain nodes.
+              </li>
+
+              <li>
+                A calculation may take more than two minutes depending
+                on terrain complexity and the selected algorithm.
+              </li>
+
+              <li>
+                The current backend search limit is 20,000 node
+                expansions.
+              </li>
+            </ul>
+
+            <p className="mt-3 text-xs font-semibold leading-relaxed text-red-300">
+              Recommendation: Select a nearby destination to keep
+              route comparison practical and responsive.
+            </p>
+
+          </div>
+
+          {/* ZOOM EXPLANATION */}
+
+          <div className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-400">
+            <span className="text-red-400">ⓘ</span>
+
+            <p>
+              Changing zoom does not reduce the distance between
+              selected coordinates. If your destination is too far
+              away, zoom in and select a new, closer destination.
+              Your selected starting point remains a separate
+              coordinate unless you change it.
+            </p>
+          </div>
+
+        </div>
+
+        {/* SELECTED COORDINATES */}
+
         <div className="grid gap-3 text-sm md:grid-cols-2">
           <div className="rounded-lg bg-slate-800 p-3">
-            <p className="text-slate-400">Starting pixel</p>
+            <p className="text-slate-400">Starting Pixel</p>
 
             <p className="mt-1 font-mono text-green-400">
               {startPoint
@@ -917,7 +1029,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
           </div>
 
           <div className="rounded-lg bg-slate-800 p-3">
-            <p className="text-slate-400">Destination pixel</p>
+            <p className="text-slate-400">Destination Pixel</p>
 
             <p className="mt-1 font-mono text-red-400">
               {destinationPoint
@@ -940,12 +1052,15 @@ Write a detailed, understandable comparison report with headings and bullet poin
           </div>
         </div>
 
+        {/* ROUTE MAP */}
+
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-700">
           <MarsMap
             className="h-[480px] w-full"
             startPoint={startPoint}
             destinationPoint={destinationPoint}
             routePoints={routePoints}
+            routes={mapRoutes}
             onMapClick={handleMapSelection}
             onClearStartPoint={() => {
               clearStartPoint();
@@ -958,10 +1073,38 @@ Write a detailed, understandable comparison report with headings and bullet poin
           />
         </div>
 
-        <p className="mt-3 text-xs text-slate-500">
-          Green marker: start. Red marker: destination. The currently
-          selected route is displayed on the map.
-        </p>
+        {/* MAP LEGEND */}
+
+        <div className="mt-4 rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+          <p className="mb-3 text-sm font-semibold text-white">
+            Route Strategy Legend
+          </p>
+
+          <div className="flex flex-wrap gap-x-5 gap-y-3">
+            {Object.entries(STRATEGY_LABELS).map(
+              ([strategy, label]) => (
+                <div
+                  key={strategy}
+                  className="flex items-center gap-2 text-xs text-slate-300"
+                >
+                  <span
+                    className="h-3 w-6 rounded-full"
+                    style={{
+                      backgroundColor:
+                        STRATEGY_COLORS[strategy],
+                    }}
+                  />
+                  {label}
+                </div>
+              )
+            )}
+          </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            After comparison, all successful strategy routes appear
+            on the map. The selected route is drawn thicker and on top.
+          </p>
+        </div>
       </section>
 
       {/* NAVIGATION CONFIGURATION */}
@@ -996,7 +1139,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
             </p>
 
             <p className="mt-1 text-xs text-slate-400">
-              The backend automatically evaluates shortest, safest,
+              The backend evaluates shortest, safest,
               energy-efficient and balanced strategies.
             </p>
           </div>
@@ -1084,7 +1227,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
         {loading && (
           <p className="mt-3 text-center text-sm text-slate-400">
             Calculating outbound and return routes, evaluating rover
-            energy and generating the route comparison...
+            energy and generating the comparison...
           </p>
         )}
 
@@ -1132,28 +1275,30 @@ Write a detailed, understandable comparison report with headings and bullet poin
                   : "text-red-400"
               }`}
             >
-              {result.recommendation}
+              {result.recommendation || "NO-GO"}
             </h3>
 
             <p className="mt-2 text-lg font-semibold text-white">
               Selected strategy:{" "}
               {STRATEGY_LABELS[result.recommended_strategy] ||
-                result.recommended_strategy}
+                result.recommended_strategy ||
+                "Not available"}
             </p>
 
             <p className="mt-3 text-sm text-slate-300">
-              {result.recommendation_reason}
+              {result.recommendation_reason ||
+                "No recommendation reason was supplied."}
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <ResultValue
                 label="Successful Routes"
-                value={result.successful_candidates}
+                value={result.successful_candidates ?? null}
               />
 
               <ResultValue
                 label="Feasible Routes"
-                value={result.feasible_candidates}
+                value={result.feasible_candidates ?? null}
               />
             </div>
           </div>
@@ -1168,8 +1313,8 @@ Write a detailed, understandable comparison report with headings and bullet poin
                 </h3>
 
                 <p className="mt-1 text-xs text-slate-400">
-                  AI explains the Python backend results. Python remains
-                  responsible for the GO/NO-GO decision.
+                  Gemini explains the Python backend results.
+                  Python remains responsible for the GO/NO-GO decision.
                 </p>
               </div>
 
@@ -1198,7 +1343,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
             )}
           </div>
 
-          {/* ALL FOUR CANDIDATES */}
+          {/* ALL ROUTE CANDIDATES */}
 
           <div>
             <h3 className="text-xl font-bold">
@@ -1206,15 +1351,15 @@ Write a detailed, understandable comparison report with headings and bullet poin
             </h3>
 
             <p className="mt-1 text-sm text-slate-400">
-              Select a candidate to display its outbound and return
-              route on the map.
+              All successful routes are shown on the map.
+              Select a candidate below to highlight it.
             </p>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            {(result.candidates || []).map((candidate) => (
+            {(result.candidates || []).map((candidate, index) => (
               <RouteCandidateCard
-                key={candidate.route_id}
+                key={candidate.route_id || `${candidate.strategy}-${index}`}
                 candidate={candidate}
                 selected={
                   candidate.route_id === activeCandidate?.route_id
@@ -1224,12 +1369,12 @@ Write a detailed, understandable comparison report with headings and bullet poin
             ))}
           </div>
 
-          {/* SELECTED ROUTE DETAILS */}
+          {/* ACTIVE ROUTE DETAILS */}
 
           {activeCandidate && (
             <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-5">
               <h3 className="text-lg font-bold text-orange-400">
-                Route Currently Displayed on Map
+                Route Highlighted on Map
               </h3>
 
               <p className="mt-2 text-sm text-slate-300">
@@ -1242,8 +1387,9 @@ Write a detailed, understandable comparison report with headings and bullet poin
               </p>
 
               <p className="mt-3 text-sm text-slate-400">
-                The map displays the outbound route followed by
-                the return route for this candidate.
+                The highlighted route displays its outbound path
+                followed by its return path, when both are supplied
+                by the backend.
               </p>
             </div>
           )}
@@ -1252,7 +1398,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
 
           <details className="rounded-lg border border-slate-700 p-4">
             <summary className="cursor-pointer text-sm font-medium text-slate-300">
-              View complete backend comparison response
+              View Complete Backend Comparison Response
             </summary>
 
             <pre className="mt-3 max-h-[600px] overflow-auto whitespace-pre-wrap break-words text-xs text-green-300">
