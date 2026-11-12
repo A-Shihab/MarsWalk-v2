@@ -245,7 +245,7 @@ function Dashboard({ onNavigate }) {
         "Upload JPG or PNG terrain images.",
         "Generate semantic segmentation maps.",
         "View prediction overlays.",
-        "Review displayed Soil, Bedrock and Sand statistics.",
+        "Review predicted Soil, Bedrock, Sand and Big Rock.",
       ],
       benefit:
         "Explore how deep learning can identify terrain categories from rover-camera imagery and support future visual perception systems.",
@@ -348,11 +348,11 @@ function Dashboard({ onNavigate }) {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => navigate("mission")}
+              onClick={() => navigate("jezero-demo")}
               className="flex items-center gap-2 rounded-xl mars-gradient px-5 py-3 text-sm font-bold text-white shadow-lg shadow-mars-500/10 transition hover:brightness-110"
             >
               <Compass size={17} />
-              Plan a Mission
+              Run Jezero demo
               <ArrowRight size={16} />
             </button>
 
@@ -555,8 +555,8 @@ function Dashboard({ onNavigate }) {
       <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-space-900">
         <div className="absolute inset-0">
           <img
-            src="/jesero_ortho.png"
-            alt="Jezero Crater Mars orthomosaic"
+            src="/jezero-demo/ctx.png"
+            alt="MRO CTX mosaic of southern Nili Planum"
             className="h-full w-full object-cover opacity-30"
           />
 
@@ -571,11 +571,11 @@ function Dashboard({ onNavigate }) {
             </div>
 
             <h2 className="font-display text-3xl font-bold text-white">
-              Jezero Crater
+              Southern Nili Planum
             </h2>
 
             <p className="mt-3 max-w-lg text-sm leading-7 text-slate-300">
-              MARSWALK uses processed Jezero Crater elevation
+              MARSWALK uses processed Jezero-region elevation
               and surface imagery data as the geographical
               foundation for its terrain intelligence and
               rover navigation capabilities.
@@ -851,7 +851,7 @@ function Dashboard({ onNavigate }) {
           </div>
 
           <p className="mt-5 text-xs leading-6 text-slate-500">
-            Evaluation results are from the expert-labeled
+            The project reports these results on the expert-labeled
             AI4MARS test set. The model was trained from scratch.
             These metrics do not establish performance on
             Jezero orbital imagery.

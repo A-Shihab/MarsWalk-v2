@@ -439,6 +439,16 @@ http://localhost:5173
 
 Make sure the frontend API configuration points to the backend running on port `8001`.
 
+### Judge demo
+
+1. Open the dashboard and select **Run Jezero demo**. The map opens at the Nili wind-ridge stop with outbound and return paths, mapped geology and a terrain-slope legend. Switch between CTX optical and THEMIS nighttime infrared imagery with the orbital image selector.
+2. Edit the walking pace, science time, available time or return reserve. **Plan rover equipment support** opens Route Planner with the same two raster cells. Compare the four candidates, highlight one, and select **Use highlighted route in Mission Planner**.
+3. Open **AI Terrain Intelligence** and select **Try sample image** to run inference on a credited Curiosity Navcam frame.
+
+Gemini commentary is optional. Route selection, energy, time, modeled feasibility and image segmentation run locally without a Gemini key.
+
+The demo sits in southern Nili Planum, southwest of Jezero crater. The optical mosaic, nighttime IR mosaic and geology are from [USGS SIM 3464](https://doi.org/10.3133/sim3464). Layer credits, coverage and resolution are shown below the map. To rebuild the browser layers, extract the [SIM 3464 database](https://pubs.usgs.gov/sim/3464/sim3464_database.zip), then export [geologic units in the demo footprint](https://services.arcgis.com/v01gqwM5QqNysAAi/ArcGIS/rest/services/Jezero_FeatureServiceFromPro/FeatureServer/8/query?geometry=77.2267%2C18.1012%2C77.2960%2C18.1706&geometryType=esriGeometryEnvelope&spatialRel=esriSpatialRelIntersects&inSR=4326&outSR=4326&outFields=OBJECTID%2Csymbol&f=geojson) as GeoJSON. From `backend`, run `python prepare_jezero_demo.py <extracted-directory> <geologic-units.geojson>`. The script checks raster coverage and mapped unit IDs at the staging and science stops.
+
 ---
 
 ## 🔌 Main Backend API Endpoints

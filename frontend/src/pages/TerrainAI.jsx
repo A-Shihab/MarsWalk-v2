@@ -43,6 +43,9 @@ const TERRAIN_CLASSES = [
   },
 ];
 
+const SAMPLE_URL = "/jezero-demo/curiosity-sol-3994.jpg";
+const SAMPLE_PRODUCT = "NRB_752041454EDR_M1050418NCAM00579M_";
+
 const formatPercentage = (value) => {
   return `${Number(value || 0).toFixed(2)}%`;
 };
@@ -125,18 +128,21 @@ function TerrainAI() {
   // RUN AI PREDICTION
   // --------------------------------------------------
 
-  const handlePrediction = async () => {
-    if (!selectedFile) {
-      setError("Please select an image first.");
-      return;
-    }
-
+  const handlePrediction = async (useSample = false) => {
+    setLoading(true);
+    setError("");
+    setPrediction(null);
     try {
-      setLoading(true);
-      setError("");
-      setPrediction(null);
-
-      const result = await predictTerrain(selectedFile);
+      let file = selectedFile;
+      if (useSample) {
+        const response = await fetch(SAMPLE_URL);
+        if (!response.ok) throw new Error("The NASA sample image could not load.");
+        file = new File([await response.blob()], `${SAMPLE_PRODUCT}.JPG`, { type: "image/jpeg" });
+        setSelectedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+      }
+      if (!file) throw new Error("Please select an image first.");
+      const result = await predictTerrain(file);
 
       if (!result || !result.success) {
         throw new Error("Terrain prediction was unsuccessful.");
@@ -313,7 +319,15 @@ function TerrainAI() {
         <div className="mt-6 flex flex-wrap gap-3">
 
           <button
-            onClick={handlePrediction}
+            type="button"
+            onClick={() => handlePrediction(true)}
+            disabled={loading}
+            className="rounded-lg border border-orange-400 px-5 py-3 text-sm font-semibold text-orange-200 hover:bg-orange-500/10 disabled:opacity-40"
+          >
+            Try sample image
+          </button>
+          <button
+            onClick={() => handlePrediction()}
             disabled={!selectedFile || loading}
             className="flex items-center justify-center gap-2 rounded-lg bg-mars-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-mars-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -340,6 +354,11 @@ function TerrainAI() {
           </button>
 
         </div>
+
+        <p className="mt-3 text-sm leading-6 text-slate-400">
+          Ground-level imagery · Curiosity Right Navigation Camera, Gale Crater, sol 3994 · NASA/JPL-Caltech. This sample has no reference mask.
+          <br /><a className="underline" href="https://mars.nasa.gov/raw_images/1270884/">{SAMPLE_PRODUCT}</a>
+        </p>
 
         {loading && (
           <div className="mt-5 rounded-lg border border-mars-500/20 bg-mars-500/5 p-4">
@@ -628,7 +647,7 @@ function TerrainAI() {
 
                   <p className="mt-1 text-xs text-slate-500">
                     Mean confidence:{" "}
-                    {formatConfidence(terrain.mean_confidence)}
+                    {terrain.pixel_count > 0 ? formatConfidence(terrain.mean_confidence) : "No predicted pixels"}
                   </p>
 
                 </div>
@@ -650,15 +669,16 @@ function TerrainAI() {
             </div>
 
             <p className="mt-3 text-sm leading-7 text-slate-300">
-              {prediction.scientific_note ||
-                "These predictions are based on the AI4MARS training dataset and have not been validated for orbital Jezero orthomosaic imagery or autonomous rover safety decisions."}
+              The U-Net was trained on AI4MARS Curiosity ground-level imagery. Confidence is the model's mean assigned-class probability for these pixels. Accuracy requires comparison to labeled pixels.
             </p>
-
-            <p className="mt-3 text-xs text-slate-500">
-              Model confidence is not equivalent to measured
-              prediction accuracy or verified terrain safety.
+            <p className="mt-3 text-sm leading-7 text-slate-300">
+              The project reports 92.95% pixel accuracy and 66.43% mean IoU on an expert test set. The README reports weaker Big Rock performance. The repository provides no per-class IoU table or reproducible expert test split. Orbital imagery and operational terrain safety are outside the evaluated scope.
             </p>
-
+            <p className="mt-3 text-xs text-slate-400">
+              <a className="underline" href="https://github.com/A-Shihab/MarsWalk-v2/blob/4fffda9/README.md">MARSWALK benchmark</a>
+              {" · "}
+              <a className="underline" href="https://data.nasa.gov/dataset/ai4mars-a-dataset-for-terrain-aware-autonomous-driving-on-mars">NASA AI4MARS dataset</a>
+            </p>
           </div>
 
         </section>

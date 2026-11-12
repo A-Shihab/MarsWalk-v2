@@ -15,6 +15,7 @@ from app.schemas.pydantic_models import (
 from app.services.terrain_service import get_terrain_service
 from app.services.routing_service import get_routing_service
 from app.services.mission_service import get_mission_service
+from app.schemas.rover_models import RoverCommentaryRequest
 from app.services.gemini_analysis_service import (
     get_gemini_analysis_service,
 )
@@ -153,3 +154,14 @@ def explain_mission(request: GeminiExplanationRequest):
             status_code=500,
             detail=f"Gemini explanation failed: {str(error)}",
         )
+
+
+@router.post("/gemini/rover-commentary", response_model=GeminiExplanationResponse)
+def explain_rover_trip(request: RoverCommentaryRequest):
+    service = get_gemini_analysis_service()
+    if not service.is_available():
+        raise HTTPException(status_code=503, detail="Gemini is unavailable on this backend.")
+    try:
+        return service.generate_rover_commentary(request.energy, request.route_reason)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Gemini could not generate commentary.") from exc

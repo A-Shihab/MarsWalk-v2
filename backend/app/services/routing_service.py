@@ -16,6 +16,10 @@ from app.services.raster_service import get_raster_service
 from app.services.terrain_service import get_terrain_service
 
 
+class RouteSearchLimitError(RuntimeError):
+    """The configured search budget was exhausted."""
+
+
 class RoutingService:
     """
     Mars rover route planning using A* or Dijkstra.
@@ -360,10 +364,9 @@ class RoutingService:
             nodes_explored += 1
 
             if nodes_explored >= self.MAX_EXPANSIONS:
-                raise RuntimeError(
+                raise RouteSearchLimitError(
                     "Search reached its expansion limit. "
-                    "Try a closer destination or increase "
-                    "the search limit."
+                    "Choose closer endpoints or try A* if using Dijkstra."
                 )
 
             for dr, dc in self.NEIGHBORS:

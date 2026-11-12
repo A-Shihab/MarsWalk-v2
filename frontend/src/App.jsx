@@ -5,10 +5,13 @@ import Navbar from "./components/Navbar.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import MissionPlanner from "./pages/MissionPlanner.jsx";
 import RoutePlanner from "./pages/RoutePlanner.jsx";
+import JezeroDemo from "./pages/JezeroDemo.jsx";
 import TerrainAI from "./pages/TerrainAI.jsx";
 
 function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [routeTrip, setRouteTrip] = useState(null);
+  const [missionTrip, setMissionTrip] = useState(null);
 
   // Change page and reset scroll position to the top
   const handlePageChange = (page) => {
@@ -20,6 +23,11 @@ function App() {
       behavior: "instant",
     });
   };
+
+  function handoff(page, setTrip, trip) {
+    setTrip(previous => ({ ...trip, revision: (previous?.revision ?? 0) + 1 }));
+    handlePageChange(page);
+  }
 
   return (
     <div className="min-h-screen bg-space-950 text-slate-100">
@@ -42,6 +50,10 @@ function App() {
           <Dashboard onNavigate={handlePageChange} />
         </div>
 
+        {activePage === "jezero-demo" && (
+          <JezeroDemo onSupportTrip={trip => handoff("routes", setRouteTrip, trip)} />
+        )}
+
         {/* MISSION PLANNER */}
         <div
           className={
@@ -51,7 +63,7 @@ function App() {
           }
           aria-hidden={activePage !== "mission"}
         >
-          <MissionPlanner />
+          <MissionPlanner key={missionTrip?.revision} trip={missionTrip} />
         </div>
 
         {/* ROUTE PLANNER */}
@@ -63,7 +75,11 @@ function App() {
           }
           aria-hidden={activePage !== "routes"}
         >
-          <RoutePlanner />
+          <RoutePlanner
+            key={routeTrip?.revision}
+            trip={routeTrip}
+            onUseRoute={trip => handoff("mission", setMissionTrip, trip)}
+          />
         </div>
 
         {/* TERRAIN AI */}

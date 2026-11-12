@@ -14,7 +14,7 @@ load_dotenv()
 
 class GeminiAnalysisService:
     def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.api_key = os.getenv("GEMINI_API_KEY", "").strip()
         self.model_name = os.getenv(
             "GEMINI_MODEL",
             "gemini-flash-latest"
@@ -32,6 +32,18 @@ class GeminiAnalysisService:
 
     def is_available(self) -> bool:
         return self.client is not None
+
+    def generate_rover_commentary(self, energy, route_reason):
+        prompt = (
+            "Provide one short paragraph of qualitative commentary on this modeled rover trip. "
+            "Explain which modeled constraints drive the result and what assumption could be "
+            "varied to explore it. Refer to the structured figures shown alongside the commentary. "
+            "Do not quote or calculate numerical values, issue a new verdict, or certify safety. "
+            f"Route selection: {route_reason}\n"
+            f"Structured energy result: {energy.model_dump_json(by_alias=True)}"
+        )
+        response = self.client.models.generate_content(model=self.model_name, contents=prompt)
+        return GeminiExplanationResponse(explanation=(response.text or "").strip())
 
     def generate_explanation(
         self,

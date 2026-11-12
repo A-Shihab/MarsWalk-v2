@@ -1,27 +1,18 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MarsMap from "../components/MarsMap";
-import GeminiReport from "../components/GeminiReport";
+import RoverCommentary from "../components/RoverCommentary";
+import { DEFAULT_ROVER } from "../services/roverDefaults";
 import useMarsMap from "../hooks/useMarsMap";
 import {
   planRoverMission,
-  explainMission,
 } from "../services/api";
 
 // --------------------------------------------------
 // DEFAULT ROVER SPECIFICATIONS
 // --------------------------------------------------
 
-const DEFAULT_ROVER = {
-  battery_capacity_wh: 7200,
-  average_speed_mps: 0.05,
-  flat_power_w: 100,
-  rover_mass_kg: 200,
-  reserve_percent: 20,
-  max_slope_deg: 25,
-  rolling_resistance_coefficient: 0.02,
-  drivetrain_efficiency: 0.75,
-};
+
 
 // --------------------------------------------------
 // REUSABLE NUMBER INPUT
@@ -38,13 +29,14 @@ function RoverNumberField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-300">
+      <label htmlFor={`mission-${name}`} className="mb-2 block text-sm font-medium text-slate-300">
         {label}
         {unit && <span className="ml-1 text-slate-500">({unit})</span>}
       </label>
 
       <input
         type="number"
+        id={`mission-${name}`}
         name={name}
         min={min}
         step={step}
@@ -70,11 +62,6 @@ function formatNumber(value, decimals = 2) {
   return number.toFixed(decimals);
 }
 
-function getNumber(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-
 function StatCard({ label, value, unit }) {
   return (
     <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
@@ -98,7 +85,7 @@ function StatCard({ label, value, unit }) {
 // MAIN MISSION PLANNER
 // --------------------------------------------------
 
-export default function MissionPlanner() {
+export default function MissionPlanner({ trip }) {
   const {
     startPoint,
     destinationPoint,
@@ -109,20 +96,18 @@ export default function MissionPlanner() {
     resetPoints,
     selectStartPoint,
     selectDestinationPoint,
-  } = useMarsMap();
+  } = useMarsMap(trip);
 
-  const [algorithm, setAlgorithm] = useState("astar");
-  const [routeMode, setRouteMode] = useState("safest");
-  const [rover, setRover] = useState(DEFAULT_ROVER);
+  const [algorithm, setAlgorithm] = useState(trip?.algorithm ?? "astar");
+  const [routeMode, setRouteMode] = useState(trip?.strategy ?? "safest");
+  const [rover, setRover] = useState(trip?.rover ?? DEFAULT_ROVER);
 
   const [missionResult, setMissionResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const pending = useRef(null);
+  useEffect(() => () => pending.current?.abort(), []);
 
-  // Gemini states
-  const [geminiExplanation, setGeminiExplanation] = useState("");
-  const [geminiLoading, setGeminiLoading] = useState(false);
-  const [geminiError, setGeminiError] = useState("");
+  const [error, setError] = useState("");
 
   // ------------------------------------------------
   // ROUTE POINTS FOR MAP
@@ -146,10 +131,15 @@ export default function MissionPlanner() {
   // MAP CLICK HANDLER
   // ------------------------------------------------
 
-  const onMarsMapClick = (pixel) => {
+  function clearMissionResult() {
+    pending.current?.abort();
+    setLoading(false);
     setMissionResult(null);
-    setGeminiExplanation("");
-    setGeminiError("");
+    setError("");
+  }
+
+  const onMarsMapClick = (pixel) => {
+    clearMissionResult();
     setError("");
     handleMapClick(pixel);
   };
@@ -166,9 +156,7 @@ export default function MissionPlanner() {
       [name]: value === "" ? "" : Number(value),
     }));
 
-    setMissionResult(null);
-    setGeminiExplanation("");
-    setGeminiError("");
+    clearMissionResult();
   };
 
   // ------------------------------------------------
@@ -177,9 +165,7 @@ export default function MissionPlanner() {
 
   const handleReset = () => {
     resetPoints();
-    setMissionResult(null);
-    setGeminiExplanation("");
-    setGeminiError("");
+    clearMissionResult();
     setError("");
   };
 
@@ -229,178 +215,12 @@ export default function MissionPlanner() {
   };
 
   // ------------------------------------------------
-  // SEND MISSION RESULTS TO GEMINI
-  // ------------------------------------------------
-
-  const generateGeminiExplanation = async (result) => {
-    setGeminiLoading(true);
-    setGeminiExplanation("");
-    setGeminiError("");
-
-    try {
-      const energy = result.energy || {};
-      const outbound = energy.outbound || {};
-      const returning = energy.return || {};
-      const roundTrip = energy.round_trip || {};
-
-      const outboundDistance = getNumber(
-        result.outbound_distance_m
-      );
-
-      const returnDistance = getNumber(
-        result.return_distance_m
-      );
-
-      const totalDistance = getNumber(
-        roundTrip.total_distance_m,
-        outboundDistance + returnDistance
-      );
-
-      const outboundEnergy = getNumber(
-        outbound.total_energy_wh
-      );
-
-      const returnEnergy = getNumber(
-        returning.total_energy_wh
-      );
-
-      const totalEnergy = getNumber(
-        roundTrip.total_energy_wh,
-        outboundEnergy + returnEnergy
-      );
-
-      const outboundSlope = getNumber(
-        outbound.maximum_slope_deg
-      );
-
-      const returnSlope = getNumber(
-        returning.maximum_slope_deg
-      );
-
-      const maximumSlope = Math.max(
-        outboundSlope,
-        returnSlope
-      );
-
-      const totalTravelTimeSeconds =
-        getNumber(roundTrip.total_time_hours) * 3600;
-
-      const outboundPixels =
-        result.outbound_route_pixels || [];
-
-      const returnPixels =
-        result.return_route_pixels || [];
-
-      const totalSegments =
-        Math.max(0, outboundPixels.length - 1) +
-        Math.max(0, returnPixels.length - 1);
-
-      const routeMetrics = {
-        distance_m: totalDistance,
-        mean_slope_deg: 0,
-        max_slope_deg: maximumSlope,
-        ascent_m: 0,
-        descent_m: 0,
-        estimated_energy_wh: totalEnergy,
-        estimated_travel_time_seconds: totalTravelTimeSeconds,
-        steep_segments: 0,
-        total_segments: totalSegments,
-      };
-
-      const terrainSummary = `
-MISSION RESULT:
-- Mission feasibility: ${energy.mission_feasible ? "FEASIBLE" : "NOT FEASIBLE"}
-- Python recommendation: ${energy.recommendation || "UNKNOWN"}
-- Python recommendation reason: ${energy.recommendation_reason || "Not provided"}
-- Pathfinding algorithm: ${result.algorithm || algorithm}
-- Route preference: ${result.route_mode || routeMode}
-
-OUTBOUND JOURNEY:
-- Distance: ${outboundDistance} meters
-- Energy consumption: ${outboundEnergy} Wh
-- Travel time: ${getNumber(outbound.travel_time_seconds)} seconds
-- Maximum slope: ${outboundSlope} degrees
-- Nodes explored: ${getNumber(result.outbound_nodes_explored)}
-
-RETURN JOURNEY:
-- Distance: ${returnDistance} meters
-- Energy consumption: ${returnEnergy} Wh
-- Travel time: ${getNumber(returning.travel_time_seconds)} seconds
-- Maximum slope: ${returnSlope} degrees
-- Nodes explored: ${getNumber(result.return_nodes_explored)}
-
-ROUND TRIP:
-- Total distance: ${totalDistance} meters
-- Total energy: ${totalEnergy} Wh
-- Total travel time: ${totalTravelTimeSeconds} seconds
-- Remaining battery: ${getNumber(roundTrip.remaining_battery_percent)} percent
-- Usable battery: ${getNumber(roundTrip.usable_energy_wh)} Wh
-- Total explored nodes: ${getNumber(result.total_nodes_explored)}
-
-ROVER SPECIFICATIONS:
-- Battery capacity: ${rover.battery_capacity_wh} Wh
-- Average speed: ${rover.average_speed_mps} m/s
-- Flat terrain power: ${rover.flat_power_w} W
-- Rover mass: ${rover.rover_mass_kg} kg
-- Required battery reserve: ${rover.reserve_percent} percent
-- Maximum allowed slope: ${rover.max_slope_deg} degrees
-- Rolling resistance coefficient: ${rover.rolling_resistance_coefficient}
-- Drivetrain efficiency: ${rover.drivetrain_efficiency}
-
-SAFETY CHECKS:
-- Battery sufficient: ${energy.checks?.battery_sufficient ? "PASS" : "FAIL"}
-- Slope sufficient: ${energy.checks?.slope_sufficient ? "PASS" : "FAIL"}
-- Slope violations: ${getNumber(energy.checks?.slope_violation_count)}
-
-DATA LIMITATIONS:
-- Mean slope is not supplied by the current mission response.
-- Elevation ascent and descent are not supplied by the current mission response.
-- Steep segment count is not supplied by the current mission response.
-- These unavailable metrics are represented by zero placeholders in the required API fields. They are NOT measured zero values.
-- Total segments is estimated from the number of returned route pixel steps.
-- Do not invent missing terrain measurements.
-
-Explain the calculated results in clear language. Discuss route difficulty, battery sufficiency, slope constraints, outbound and return travel, explored nodes, and practical mission risks.
-The Python recommendation is authoritative. Do not change the GO/NO-GO result.
-      `.trim();
-
-      const response = await explainMission({
-        route_metrics: routeMetrics,
-        route_mode: result.route_mode || routeMode,
-        terrain_summary: terrainSummary,
-      });
-
-      const explanation = response?.explanation;
-
-      if (!explanation) {
-        throw new Error(
-          "Gemini returned an empty explanation."
-        );
-      }
-
-      setGeminiExplanation(explanation);
-    } catch (err) {
-      console.error("Gemini mission explanation error:", err);
-
-      setGeminiError(
-        err.response?.data?.detail ||
-        err.message ||
-        "Could not generate the Gemini mission explanation."
-      );
-    } finally {
-      setGeminiLoading(false);
-    }
-  };
-
-  // ------------------------------------------------
   // SUBMIT MISSION TO BACKEND
   // ------------------------------------------------
 
   const handlePlanMission = async () => {
     setError("");
-    setMissionResult(null);
-    setGeminiExplanation("");
-    setGeminiError("");
+    clearMissionResult();
 
     if (!startPoint || !destinationPoint) {
       setError(
@@ -454,10 +274,13 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
       },
     };
 
+    const controller = new AbortController();
+    pending.current = controller;
     setLoading(true);
 
     try {
-      const result = await planRoverMission(payload);
+      const result = await planRoverMission(payload, controller.signal);
+      if (controller.signal.aborted) return;
 
       if (result.status !== "success") {
         throw new Error(
@@ -466,15 +289,15 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
       }
 
       setMissionResult(result);
-      generateGeminiExplanation(result);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(
         err.response?.data?.detail ||
         err.message ||
         "An unexpected mission planning error occurred."
       );
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
@@ -693,11 +516,12 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
               <MarsMap
                 startPoint={startPoint}
+                focusRoute={Boolean(trip || missionResult)}
                 destinationPoint={destinationPoint}
                 routePoints={routeDisplayPoints}
                 onMapClick={onMarsMapClick}
-                onClearStartPoint={clearStartPoint}
-                onClearDestinationPoint={clearDestinationPoint}
+                onClearStartPoint={() => { clearStartPoint(); clearMissionResult(); }}
+                onClearDestinationPoint={() => { clearDestinationPoint(); clearMissionResult(); }}
                 className="h-[500px] w-full"
               />
 
@@ -754,9 +578,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
                   value={algorithm}
                   onChange={(event) => {
                     setAlgorithm(event.target.value);
-                    setMissionResult(null);
-                    setGeminiExplanation("");
-                    setGeminiError("");
+                    clearMissionResult();
                   }}
                   className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-orange-400"
                 >
@@ -774,9 +596,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
                   value={routeMode}
                   onChange={(event) => {
                     setRouteMode(event.target.value);
-                    setMissionResult(null);
-                    setGeminiExplanation("");
-                    setGeminiError("");
+                    clearMissionResult();
                   }}
                   className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-white outline-none focus:border-orange-400"
                 >
@@ -879,9 +699,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
               type="button"
               onClick={() => {
                 setRover(DEFAULT_ROVER);
-                setMissionResult(null);
-                setGeminiExplanation("");
-                setGeminiError("");
+                clearMissionResult();
               }}
               className="mt-5 w-full rounded-lg border border-white/10 py-2 text-sm text-slate-400 transition hover:bg-white/5"
             >
@@ -942,7 +760,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
               <div>
                 <p className="text-sm uppercase tracking-widest text-slate-400">
-                  Mission Feasibility Assessment
+                  Feasibility under modeled rover constraints
                 </p>
 
                 <h2
@@ -973,14 +791,6 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
             </div>
 
           </div>
-
-          {/* GEMINI EXPLANATION */}
-
-          <GeminiReport
-            explanation={geminiExplanation}
-            loading={geminiLoading}
-            error={geminiError}
-          />
 
           {/* MISSION OVERVIEW */}
 
@@ -1067,12 +877,11 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
                 <StatCard
                   label="Travel time"
-                  value={formatNumber(outbound?.travel_time_seconds)}
-                  unit="seconds"
+                  value={`${formatNumber(outbound.travel_time_seconds)} s / ${formatNumber(outbound.travel_time_seconds / 3600, 3)} h`}
                 />
 
                 <StatCard
-                  label="Maximum slope"
+                  label="Peak segment grade"
                   value={formatNumber(outbound?.maximum_slope_deg)}
                   unit="degrees"
                 />
@@ -1108,12 +917,11 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
                 <StatCard
                   label="Travel time"
-                  value={formatNumber(returning?.travel_time_seconds)}
-                  unit="seconds"
+                  value={`${formatNumber(returning.travel_time_seconds)} s / ${formatNumber(returning.travel_time_seconds / 3600, 3)} h`}
                 />
 
                 <StatCard
-                  label="Maximum slope"
+                  label="Peak segment grade"
                   value={formatNumber(returning?.maximum_slope_deg)}
                   unit="degrees"
                 />
@@ -1134,7 +942,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
 
             <h3 className="mb-4 text-lg font-bold">
-              Mission Safety Checks
+              Modeled rover checks
             </h3>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -1213,6 +1021,7 @@ The Python recommendation is authoritative. Do not change the GO/NO-GO result.
 
           </div>
 
+          <RoverCommentary energy={energy} />
         </section>
       )}
 
