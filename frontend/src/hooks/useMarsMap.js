@@ -7,9 +7,9 @@ const RASTER_HEIGHT = 4103;
 // The projected DEM has a 1 metre pixel resolution.
 const METRES_PER_PIXEL = 1;
 
-function useMarsMap() {
-  const [startPoint, setStartPoint] = useState(null);
-  const [destinationPoint, setDestinationPoint] = useState(null);
+function useMarsMap(trip) {
+  const [startPoint, setStartPoint] = useState(trip?.start ?? null);
+  const [destinationPoint, setDestinationPoint] = useState(trip?.destination ?? null);
   const [selectionMode, setSelectionMode] = useState("start");
 
   const handleMapClick = useCallback(

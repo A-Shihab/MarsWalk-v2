@@ -49,9 +49,9 @@ const handleApiError = (error) => {
 // SHARED REQUEST HELPERS
 // --------------------------------------------------
 
-const postRequest = async (url, data) => {
+const postRequest = async (url, data, config) => {
   try {
-    const response = await api.post(url, data);
+    const response = await api.post(url, data, config);
     return response.data;
   } catch (error) {
     handleApiError(error);
@@ -72,16 +72,16 @@ const getRequest = async (url, config = {}) => {
 // POST /api/rover/mission/plan
 // --------------------------------------------------
 
-export const planRoverMission = (missionData) =>
-  postRequest("/api/rover/mission/plan", missionData);
+export const planRoverMission = (missionData, signal) =>
+  postRequest("/api/rover/mission/plan", missionData, { signal });
 
 // --------------------------------------------------
 // ROVER ROUTE COMPARISON API
 // POST /api/rover/routes/compare
 // --------------------------------------------------
 
-export const compareRoverRoutes = (comparisonData) =>
-  postRequest("/api/rover/routes/compare", comparisonData);
+export const compareRoverRoutes = (comparisonData, signal) =>
+  postRequest("/api/rover/routes/compare", comparisonData, { signal });
 
 // --------------------------------------------------
 // ROVER ENERGY API
@@ -130,6 +130,9 @@ export const planMission = (missionData) =>
 // --------------------------------------------------
 // GEMINI EXPLANATION API
 // --------------------------------------------------
+
+export const getRoverCommentary = (data, signal) =>
+  postRequest("/api/gemini/rover-commentary", data, { signal });
 
 export const explainMission = (missionData) =>
   postRequest("/api/gemini/explain", missionData);

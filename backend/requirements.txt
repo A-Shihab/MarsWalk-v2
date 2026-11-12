@@ -19,6 +19,10 @@ shapely
 # Data processing
 pandas
 
+# Terrain segmentation
+pillow
+torch
+
 # Gemini API
 google-genai
 

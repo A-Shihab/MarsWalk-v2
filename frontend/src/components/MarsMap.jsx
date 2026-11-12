@@ -1,11 +1,13 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   MapContainer,
   ImageOverlay,
   Marker,
   Polyline,
+  Polygon,
+  Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet";
@@ -57,9 +59,9 @@ function isValidPixel(point) {
     Number.isFinite(x) &&
     Number.isFinite(y) &&
     x >= 0 &&
-    x <= MAP_WIDTH &&
+    x < MAP_WIDTH &&
     y >= 0 &&
-    y <= MAP_HEIGHT
+    y < MAP_HEIGHT
   );
 }
 
@@ -67,8 +69,8 @@ function convertPixel(point) {
   if (!isValidPixel(point)) return null;
 
   return [
-    MAP_HEIGHT - Number(point.y),
-    Number(point.x),
+    MAP_HEIGHT - Number(point.y) - 0.5,
+    Number(point.x) + 0.5,
   ];
 }
 
@@ -77,8 +79,8 @@ function MapClickHandler({ onMapClick }) {
     click(event) {
       if (!onMapClick) return;
 
-      const pixel_x = Math.round(event.latlng.lng);
-      const pixel_y = Math.round(
+      const pixel_x = Math.floor(event.latlng.lng);
+      const pixel_y = Math.floor(
         MAP_HEIGHT - event.latlng.lat
       );
 
@@ -100,10 +102,60 @@ function MapClickHandler({ onMapClick }) {
   return null;
 }
 
+function MapScale() {
+  const map = useMap();
+  useEffect(() => {
+    // One CRS.Simple map unit is one projected metre.
+    const control = L.control.scale({ imperial: false, position: "bottomleft" });
+    control.addTo(map);
+    return () => control.remove();
+  }, [map]);
+  return null;
+}
+
+function FocusRoute({ start, destination }) {
+  const map = useMap();
+  useEffect(() => {
+    if (start && destination) {
+      map.fitBounds([convertPixel(start), convertPixel(destination)], {
+        padding: [100, 75],
+        maxZoom: 3,
+      });
+    }
+  }, [map, start, destination]);
+  return null;
+}
+
+function RouteLine({ route }) {
+  const line = useRef(null);
+  useEffect(() => {
+    if (route.selected) line.current?.bringToFront();
+  }, [route.selected]);
+  return (
+    <Polyline
+      ref={line}
+      positions={route.positions}
+      pathOptions={{
+        color: route.color || "#22c55e",
+        weight: route.weight ?? (route.selected ? 6 : 4),
+        opacity: route.selected ? 1 : 0.75,
+        dashArray: route.dashArray,
+        lineCap: "round",
+        lineJoin: "round",
+      }}
+    />
+  );
+}
+
 function MapZoomControls() {
   const map = useMap();
-  const [activeZoom, setActiveZoom] = useState(-1);
+  const [activeZoom, setActiveZoom] = useState(map.getZoom());
+  const controls = useRef(null);
+  useEffect(() => {
+    L.DomEvent.disableClickPropagation(controls.current);
+  }, []);
 
+  useMapEvents({ zoomend: () => setActiveZoom(map.getZoom()) });
   const applyZoom = (zoom) => {
     const safeZoom = Math.min(
       map.getMaxZoom(),
@@ -116,7 +168,7 @@ function MapZoomControls() {
   };
 
   return (
-    <div className="absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-xl">
+    <div ref={controls} className="absolute right-3 top-3 z-[1000] flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-xl">
       <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
         Map Zoom
       </p>
@@ -140,9 +192,6 @@ function MapZoomControls() {
         );
       })}
 
-      <p className="max-w-32 px-1 text-[10px] leading-relaxed text-slate-500">
-        Zoom changes the view, not the distance between selected points.
-      </p>
     </div>
   );
 }
@@ -156,6 +205,12 @@ export default function MarsMap({
   onClearStartPoint,
   onClearDestinationPoint,
   className = "h-[500px] w-full",
+  focusRoute = false,
+  basemap = "ctx",
+  slope = false,
+  geology = [],
+  startLabel,
+  destinationLabel,
 }) {
   // Backwards compatibility:
   // If no multiple routes are supplied, display routePoints.
@@ -215,26 +270,35 @@ export default function MarsMap({
         }}
       >
         <ImageOverlay
-          url="/jesero_ortho.png"
+          url={`/jezero-demo/${basemap}.png`}
+          attribution={'<a href="https://doi.org/10.3133/sim3464">USGS SIM 3464</a>'}
           bounds={IMAGE_BOUNDS}
         />
 
+        {slope && <ImageOverlay url="/jezero-demo/slope.png" bounds={IMAGE_BOUNDS} opacity={0.36} />}
+        {[...geology].sort((a, b) => Number(a.unit === "Aeb") - Number(b.unit === "Aeb")).map(({ id, unit, geometry }) => {
+          const polygons = geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+          const color = unit === "Aeb" ? "#67e8f9" : unit === "Nnp1" ? "#c4b5fd" : "#f8fafc";
+          return (
+            <Polygon
+              key={id}
+              positions={polygons.map(polygon => polygon.map(ring => ring.map(
+                ([x, y]) => [MAP_HEIGHT - y, x]
+              )))}
+              pathOptions={{ color, weight: 2, fillOpacity: 0.10, dashArray: "5 4" }}
+            >
+              <Tooltip sticky>{unit} · SIM 3464 feature {id}</Tooltip>
+            </Polygon>
+          );
+        })}
+        {focusRoute && <FocusRoute start={startPoint} destination={destinationPoint} />}
+        <MapScale />
         <MapClickHandler onMapClick={onMapClick} />
 
         <MapZoomControls />
 
         {preparedRoutes.map((route) => (
-          <Polyline
-            key={route.id}
-            positions={route.positions}
-            pathOptions={{
-              color: route.color || "#22c55e",
-              weight: route.selected ? 6 : 4,
-              opacity: route.selected ? 1 : 0.75,
-              lineCap: "round",
-              lineJoin: "round",
-            }}
-          />
+          <RouteLine key={route.id} route={route} />
         ))}
 
         {startPosition && (
@@ -244,7 +308,9 @@ export default function MarsMap({
             eventHandlers={{
               contextmenu: () => onClearStartPoint?.(),
             }}
-          />
+          >
+            {startLabel && <Tooltip permanent direction="top" offset={[0, -11]}>{startLabel}</Tooltip>}
+          </Marker>
         )}
 
         {destinationPosition && (
@@ -254,7 +320,9 @@ export default function MarsMap({
             eventHandlers={{
               contextmenu: () => onClearDestinationPoint?.(),
             }}
-          />
+          >
+            {destinationLabel && <Tooltip permanent direction="top" offset={[0, -11]}>{destinationLabel}</Tooltip>}
+          </Marker>
         )}
       </MapContainer>
     </div>

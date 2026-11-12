@@ -1,5 +1,4 @@
-
-from math import isfinite
+from math import isclose
 
 from app.schemas.rover_models import (
     RoverEnergyResponse,
@@ -104,144 +103,15 @@ class RoverRouteComparisonService:
         )
 
     # --------------------------------------------------
-    # GENERIC FIELD ACCESS
-    # --------------------------------------------------
-
-    @staticmethod
-    def _read_field(obj, field, default=None):
-
-        if obj is None:
-            return default
-
-        if isinstance(obj, dict):
-            return obj.get(field, default)
-
-        return getattr(obj, field, default)
-
-    # --------------------------------------------------
-    # ENERGY EXTRACTION
-    # --------------------------------------------------
-
-    def _get_total_energy(self, energy):
-
-        round_trip = self._read_field(
-            energy,
-            "round_trip",
-        )
-
-        total = self._read_field(
-            round_trip,
-            "total_energy_wh",
-        )
-
-        if total is not None:
-            return float(total)
-
-        outbound = self._read_field(
-            energy,
-            "outbound",
-        )
-
-        return_leg = self._read_field(
-            energy,
-            "return_leg",
-        )
-
-        outbound_energy = self._read_field(
-            outbound,
-            "total_energy_wh",
-        )
-
-        return_energy = self._read_field(
-            return_leg,
-            "total_energy_wh",
-        )
-
-        if (
-            outbound_energy is not None
-            and return_energy is not None
-        ):
-            return (
-                float(outbound_energy)
-                + float(return_energy)
-            )
-
-        raise ValueError(
-            "Could not extract total round-trip energy."
-        )
-
-    # --------------------------------------------------
-    # PATH SLOPE EXTRACTION
-    # --------------------------------------------------
-
-    def _get_maximum_path_slope(self, path):
-
-        if not path:
-            return 0.0
-
-        maximum = 0.0
-
-        for row, col in path:
-
-            slope = float(
-                self.routing_service.slope_map[row, col]
-            )
-
-            if not isfinite(slope):
-                continue
-
-            maximum = max(maximum, slope)
-
-        return maximum
-
-    # --------------------------------------------------
-    # CANDIDATE METRICS
+    # COMPARISON METRICS
     # --------------------------------------------------
 
     def _get_candidate_metrics(self, candidate):
-
-        distance = (
-            float(candidate["outbound_distance_m"])
-            + float(candidate["return_distance_m"])
-        )
-
-        energy = self._get_total_energy(
-            candidate["energy"]
-        )
-
-        outbound_path = [
-            (
-                int(round(pixel.y)),
-                int(round(pixel.x)),
-            )
-            for pixel in candidate["outbound_route_pixels"]
-        ]
-
-        return_path = [
-            (
-                int(round(pixel.y)),
-                int(round(pixel.x)),
-            )
-            for pixel in candidate["return_route_pixels"]
-        ]
-
-        outbound_slope = self._get_maximum_path_slope(
-            outbound_path
-        )
-
-        return_slope = self._get_maximum_path_slope(
-            return_path
-        )
-
-        maximum_slope = max(
-            outbound_slope,
-            return_slope,
-        )
-
+        energy = candidate["energy"]
         return {
-            "distance": distance,
-            "energy": energy,
-            "slope": maximum_slope,
+            "distance": energy.round_trip.total_distance_m,
+            "energy": energy.round_trip.total_energy_wh,
+            "slope": candidate["maximum_segment_grade_deg"],
         }
 
     # --------------------------------------------------
@@ -249,13 +119,17 @@ class RoverRouteComparisonService:
     # --------------------------------------------------
 
     @staticmethod
-    def _normalize_values(values, tolerance):
+    def _within_tolerance(minimum, maximum, tolerance):
+        difference = maximum - minimum
+        return difference <= tolerance or isclose(difference, tolerance, rel_tol=0, abs_tol=1e-9)
+
+    def _normalize_values(self, values, tolerance):
 
         minimum = min(values)
         maximum = max(values)
 
         # Do not exaggerate insignificant differences.
-        if maximum - minimum <= tolerance:
+        if self._within_tolerance(minimum, maximum, tolerance):
             return [0.0 for _ in values]
 
         return [
@@ -269,49 +143,17 @@ class RoverRouteComparisonService:
 
     def _candidates_effectively_equivalent(self, candidates):
 
-        if len(candidates) <= 1:
-            return True
-
-        metrics = [
-            self._get_candidate_metrics(candidate)
-            for candidate in candidates
-        ]
-
-        distances = [
-            item["distance"]
-            for item in metrics
-        ]
-
-        energies = [
-            item["energy"]
-            for item in metrics
-        ]
-
-        slopes = [
-            item["slope"]
-            for item in metrics
-        ]
-
-        distance_equivalent = (
-            max(distances) - min(distances)
-            <= self.DISTANCE_TOLERANCE_M
-        )
-
-        energy_equivalent = (
-            max(energies) - min(energies)
-            <= self.ENERGY_TOLERANCE_WH
-        )
-
-        slope_equivalent = (
-            max(slopes) - min(slopes)
-            <= self.SLOPE_TOLERANCE_DEG
-        )
-
-        return (
-            distance_equivalent
-            and energy_equivalent
-            and slope_equivalent
-        )
+        metrics = [self._get_candidate_metrics(candidate) for candidate in candidates]
+        tolerances = {
+            "distance": self.DISTANCE_TOLERANCE_M,
+            "energy": self.ENERGY_TOLERANCE_WH,
+            "slope": self.SLOPE_TOLERANCE_DEG,
+        }
+        for metric, tolerance in tolerances.items():
+            values = [item[metric] for item in metrics]
+            if not self._within_tolerance(min(values), max(values), tolerance):
+                return False
+        return True
 
     # --------------------------------------------------
     # CANDIDATE GENERATION
@@ -334,6 +176,7 @@ class RoverRouteComparisonService:
             "energy": None,
             "feasible": False,
             "selection_score": None,
+            "maximum_segment_grade_deg": None,
             "selected": False,
             "reason": None,
         }
@@ -395,6 +238,10 @@ class RoverRouteComparisonService:
                 "outbound_distance_m": outbound["distance_m"],
                 "return_distance_m": return_route["distance_m"],
                 "energy": energy,
+                "maximum_segment_grade_deg": max(
+                    energy.outbound.maximum_slope_deg,
+                    energy.return_leg.maximum_slope_deg,
+                ),
                 "feasible": feasible,
                 "reason": energy.recommendation_reason,
             })
@@ -408,7 +255,7 @@ class RoverRouteComparisonService:
         except Exception as exc:
 
             candidate["reason"] = (
-                f"{type(exc).__name__}: {str(exc)}"
+                str(exc)
             )
 
         return candidate
@@ -503,22 +350,14 @@ class RoverRouteComparisonService:
 
         if selected is None:
             return (
-                "NO-GO: No candidate route passed all required "
-                "round-trip energy and safety checks. "
-                "The rover should not begin this mission."
+                "No candidate passed the modeled round-trip rover constraints."
             )
 
-        selected_strategy = selected["strategy"]
-
-        selected_distance = (
-            selected["outbound_distance_m"]
-            + selected["return_distance_m"]
-        )
-
-        selected_energy = self._get_total_energy(
-            selected["energy"]
-        )
-
+        selected_strategy = selected["strategy"].replace("_", " ")
+        metrics = self._get_candidate_metrics(selected)
+        selected_distance = metrics["distance"]
+        selected_energy = metrics["energy"]
+        selected_slope = metrics["slope"]
         selected_score = selected["selection_score"]
 
         feasible_candidates = [
@@ -530,42 +369,43 @@ class RoverRouteComparisonService:
 
         # Avoid claiming a meaningful advantage when all
         # candidates are practically equivalent.
-        if self._candidates_effectively_equivalent(
+        if len(feasible_candidates) == 1:
+            explanation = f"The {selected_strategy} route was the only feasible candidate."
+        elif self._candidates_effectively_equivalent(
             feasible_candidates
         ):
 
             explanation = (
-                f"GO: The backend selected the {selected_strategy} "
+                f"The backend selected the {selected_strategy} "
                 f"route. All feasible candidates were effectively "
                 f"equivalent within the configured comparison "
                 f"tolerances: {self.DISTANCE_TOLERANCE_M:.1f} m "
                 f"for distance, {self.ENERGY_TOLERANCE_WH:.1f} Wh "
                 f"for energy, and "
                 f"{self.SLOPE_TOLERANCE_DEG:.1f} degrees for "
-                f"maximum slope. Therefore, the backend used its "
-                f"deterministic tie-break preference rather than "
-                f"claiming a measurable performance advantage. "
-                f"The selected route has a round-trip distance of "
-                f"{selected_distance:.2f} metres and estimated "
-                f"round-trip energy of {selected_energy:.2f} Wh."
+                f"peak segment grade. The fixed strategy order broke the tie."
             )
 
         else:
-
             explanation = (
-                f"GO: The backend selected the {selected_strategy} "
-                f"route. It passed round-trip feasibility checks "
-                f"and achieved the lowest weighted selection score "
+                f"The {selected_strategy} route had the best weighted selection score "
                 f"({selected_score:.4f}) among feasible candidates. "
-                f"Its round-trip distance is "
-                f"{selected_distance:.2f} metres and estimated "
-                f"round-trip energy is "
-                f"{selected_energy:.2f} Wh. "
-                f"Selection weights: 40% distance, 40% energy, "
-                f"and 20% maximum terrain slope. Differences smaller "
-                f"than the configured comparison tolerances are "
-                f"not treated as meaningful advantages."
+                "Weights are 40% distance, 40% energy, and 20% peak segment grade."
             )
+            tied = [
+                candidate["strategy"].replace("_", " ")
+                for candidate in feasible_candidates
+                if candidate is not selected and candidate["selection_score"] == selected_score
+            ]
+            if tied:
+                explanation += (
+                    f" Equal score with {', '.join(tied)}. The fixed strategy order broke that tie."
+                )
+
+        explanation += (
+            f" Round trip: {selected_distance:.2f} m, {selected_energy:.3f} Wh, "
+            f"and {selected_slope:.3f}° peak segment grade."
+        )
 
         shortest = next(
             (
@@ -618,6 +458,10 @@ class RoverRouteComparisonService:
         )
 
         selected = self._select_best_candidate(candidates)
+        failure_reasons = dict.fromkeys(
+            candidate["reason"] for candidate in candidates
+            if candidate["status"] == "failed" and candidate["reason"]
+        )
 
         if selected is None:
 
@@ -665,7 +509,7 @@ class RoverRouteComparisonService:
             message=(
                 "Route comparison completed."
                 if selected is not None
-                else "No feasible route was found."
+                else " ".join(failure_reasons) or "No feasible route was found."
             ),
         )
 

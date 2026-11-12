@@ -1,6 +1,6 @@
 
 import numpy as np
-from scipy.ndimage import sobel, generic_filter
+from scipy.ndimage import sobel, uniform_filter
 
 from app.core.config import settings
 from app.services.raster_service import get_raster_service
@@ -75,22 +75,27 @@ class TerrainService:
 
         self.slope_map[~self._valid_mask] = np.nan
 
-        def local_std(values):
-            valid = values[np.isfinite(values)]
-
-            if valid.size < 5:
-                return np.nan
-
-            return float(np.std(valid))
-
-        self.roughness_map = generic_filter(
-            self.elevation_data,
-            function=local_std,
-            size=3,
-            mode="nearest"
+        # Center elevations before computing the population variance to avoid
+        # cancellation on nearly flat terrain. Retain the five-sample minimum.
+        centered = np.where(self._valid_mask, safe_dem - np.median(
+            safe_dem[self._valid_mask]
+        ), 0.0)
+        fraction_valid = uniform_filter(self._valid_mask.astype(float), size=3, mode="nearest")
+        enough_samples = (fraction_valid >= 0.5) & self._valid_mask
+        mean = np.divide(
+            uniform_filter(centered, size=3, mode="nearest"),
+            fraction_valid,
+            out=np.zeros_like(centered),
+            where=enough_samples,
         )
-
-        self.roughness_map[~self._valid_mask] = np.nan
+        mean_square = np.divide(
+            uniform_filter(centered ** 2, size=3, mode="nearest"),
+            fraction_valid,
+            out=np.zeros_like(centered),
+            where=enough_samples,
+        )
+        self.roughness_map = np.sqrt(np.maximum(mean_square - mean ** 2, 0.0))
+        self.roughness_map[~enough_samples] = np.nan
 
     def _validate_pixel(self, row, col):
         if (

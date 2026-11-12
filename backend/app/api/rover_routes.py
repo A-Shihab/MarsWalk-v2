@@ -9,6 +9,8 @@ from app.schemas.rover_models import (
     RoverRouteComparisonResponse,
 )
 
+from app.services.routing_service import RouteSearchLimitError
+
 from app.services.rover_energy_service import (
     rover_energy_service,
 )
@@ -36,7 +38,7 @@ router = APIRouter(
     "/mission/plan",
     response_model=RoverMissionResponse,
 )
-async def plan_rover_mission(
+def plan_rover_mission(
     request: RoverMissionRequest,
 ):
     """
@@ -58,10 +60,10 @@ async def plan_rover_mission(
             detail=str(exc),
         )
 
-    except RuntimeError as exc:
+    except RouteSearchLimitError as exc:
 
         raise HTTPException(
-            status_code=500,
+            status_code=422,
             detail=str(exc),
         )
 
@@ -74,7 +76,7 @@ async def plan_rover_mission(
     "/routes/compare",
     response_model=RoverRouteComparisonResponse,
 )
-async def compare_rover_routes(
+def compare_rover_routes(
     request: RoverMissionRequest,
 ):
     """

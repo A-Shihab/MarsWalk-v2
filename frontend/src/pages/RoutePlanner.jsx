@@ -1,29 +1,20 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import MarsMap from "../components/MarsMap";
-import GeminiReport from "../components/GeminiReport";
+import RoverCommentary from "../components/RoverCommentary";
+import { DEFAULT_ROVER } from "../services/roverDefaults";
 import useMarsMap from "../hooks/useMarsMap";
 
 import {
   compareRoverRoutes,
-  explainMission,
 } from "../services/api";
 
 // --------------------------------------------------
 // DEFAULT ROVER SPECIFICATIONS
 // --------------------------------------------------
 
-const INITIAL_ROVER = {
-  battery_capacity_wh: 7200,
-  average_speed_mps: 0.05,
-  flat_power_w: 100,
-  rover_mass_kg: 200,
-  reserve_percent: 20,
-  max_slope_deg: 25,
-  rolling_resistance_coefficient: 0.02,
-  drivetrain_efficiency: 0.75,
-};
+
 
 // --------------------------------------------------
 // STRATEGY CONFIGURATION
@@ -72,32 +63,6 @@ function getCandidateRoundTrip(candidate) {
   return getCandidateEnergy(candidate).round_trip || {};
 }
 
-function getCandidateOutbound(candidate) {
-  return getCandidateEnergy(candidate).outbound || {};
-}
-
-function getCandidateReturn(candidate) {
-  return getCandidateEnergy(candidate)["return"] || {};
-}
-
-function getCandidateMaximumSlope(candidate) {
-  const energy = getCandidateEnergy(candidate);
-
-  const outboundSlope = getOptionalNumber(
-    energy.outbound?.maximum_slope_deg
-  );
-
-  const returnSlope = getOptionalNumber(
-    energy["return"]?.maximum_slope_deg
-  );
-
-  const slopes = [outboundSlope, returnSlope].filter(
-    (value) => value !== null
-  );
-
-  return slopes.length ? Math.max(...slopes) : null;
-}
-
 function getCandidateTotalDistance(candidate) {
   const roundTrip = getCandidateRoundTrip(candidate);
 
@@ -119,22 +84,6 @@ function getCandidateTotalEnergy(candidate) {
   return getOptionalNumber(
     getCandidateRoundTrip(candidate).total_energy_wh
   );
-}
-
-function getCandidateRemainingBattery(candidate) {
-  return getOptionalNumber(
-    getCandidateRoundTrip(candidate).remaining_battery_percent
-  );
-}
-
-function getTravelTimeSeconds(segment) {
-  const seconds = getOptionalNumber(segment?.total_time_seconds);
-
-  if (seconds !== null) return seconds;
-
-  const hours = getOptionalNumber(segment?.total_time_hours);
-
-  return hours !== null ? hours * 3600 : null;
 }
 
 function getCombinedRoutePoints(candidate) {
@@ -285,8 +234,8 @@ function RouteCandidateCard({
             />
 
             <ResultValue
-              label="Maximum Slope"
-              value={formatNumber(getCandidateMaximumSlope(candidate))}
+              label="Peak Segment Grade"
+              value={formatNumber(candidate.maximum_segment_grade_deg, 3)}
               unit="°"
             />
 
@@ -316,6 +265,7 @@ function RouteCandidateCard({
           <button
             type="button"
             onClick={() => onSelect(candidate)}
+            aria-pressed={selected}
             className="mt-4 w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-orange-400 hover:bg-slate-800"
           >
             Highlight This Route on Map
@@ -330,7 +280,7 @@ function RouteCandidateCard({
 // ROUTE PLANNER
 // --------------------------------------------------
 
-export default function RoutePlanner() {
+export default function RoutePlanner({ trip, onUseRoute }) {
   const {
     startPoint,
     destinationPoint,
@@ -341,20 +291,20 @@ export default function RoutePlanner() {
     resetPoints,
     selectStartPoint,
     selectDestinationPoint,
-  } = useMarsMap();
+  } = useMarsMap(trip);
 
   const [algorithm, setAlgorithm] = useState("astar");
-  const [rover, setRover] = useState(INITIAL_ROVER);
+  const [rover, setRover] = useState(DEFAULT_ROVER);
 
   const [result, setResult] = useState(null);
   const [displayedCandidate, setDisplayedCandidate] = useState(null);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const pending = useRef(null);
+  useEffect(() => () => pending.current?.abort(), []);
 
-  const [geminiExplanation, setGeminiExplanation] = useState("");
-  const [geminiLoading, setGeminiLoading] = useState(false);
-  const [geminiError, setGeminiError] = useState("");
+
 
   // ------------------------------------------------
   // BACKEND-SELECTED CANDIDATE
@@ -413,11 +363,11 @@ export default function RoutePlanner() {
   // ------------------------------------------------
 
   function clearResults() {
+    pending.current?.abort();
+    setLoading(false);
     setResult(null);
     setDisplayedCandidate(null);
     setError("");
-    setGeminiExplanation("");
-    setGeminiError("");
   }
 
   // ------------------------------------------------
@@ -501,182 +451,7 @@ export default function RoutePlanner() {
   }
 
   // ------------------------------------------------
-  // GEMINI COMPARISON EXPLANATION
-  // ------------------------------------------------
-
-  async function generateGeminiExplanation(data) {
-    setGeminiLoading(true);
-    setGeminiExplanation("");
-    setGeminiError("");
-
-    try {
-      const candidates = data.candidates || [];
-
-      const comparisonSummary = candidates.map((candidate) => {
-        const energy = getCandidateEnergy(candidate);
-
-        return {
-          route_id: candidate.route_id,
-          strategy: candidate.strategy,
-          status: candidate.status,
-          feasible: candidate.feasible,
-          selected: candidate.selected,
-          outbound_distance_m: getOptionalNumber(
-            candidate.outbound_distance_m
-          ),
-          return_distance_m: getOptionalNumber(
-            candidate.return_distance_m
-          ),
-          round_trip_distance_m: getCandidateTotalDistance(candidate),
-          round_trip_energy_wh: getCandidateTotalEnergy(candidate),
-          maximum_slope_deg: getCandidateMaximumSlope(candidate),
-          remaining_battery_percent: getCandidateRemainingBattery(candidate),
-          selection_score: getOptionalNumber(candidate.selection_score),
-          recommendation: energy.recommendation ?? null,
-          reason: candidate.reason ?? null,
-        };
-      });
-
-      const selected =
-        candidates.find(
-          (candidate) =>
-            candidate.route_id === data.selected_route_id
-        ) ||
-        candidates.find((candidate) => candidate.selected === true);
-
-      if (!selected) {
-        throw new Error(
-          "No selected route was returned by the backend."
-        );
-      }
-
-      const selectedOutbound = getCandidateOutbound(selected);
-      const selectedReturn = getCandidateReturn(selected);
-      const selectedRoundTrip = getCandidateRoundTrip(selected);
-
-      const selectedDistance = getCandidateTotalDistance(selected);
-      const selectedConsumption = getCandidateTotalEnergy(selected);
-      const selectedSlope = getCandidateMaximumSlope(selected);
-
-      const outboundTime = getTravelTimeSeconds(selectedOutbound);
-      const returnTime = getTravelTimeSeconds(selectedReturn);
-
-      const totalTime =
-        outboundTime !== null && returnTime !== null
-          ? outboundTime + returnTime
-          : getTravelTimeSeconds(selectedRoundTrip);
-
-      const routeMetrics = {
-        distance_m: getOptionalNumber(selected.outbound_distance_m) ?? 0,
-        mean_slope_deg: 0,
-        max_slope_deg: selectedSlope ?? 0,
-        ascent_m: 0,
-        descent_m: 0,
-        estimated_energy_wh:
-          getOptionalNumber(selectedOutbound.total_energy_wh) ?? 0,
-        estimated_travel_time_seconds: outboundTime ?? 0,
-        steep_segments: 0,
-        total_segments: Math.max(
-          0,
-          (selected.outbound_route_pixels || []).length - 1
-        ),
-      };
-
-      const terrainSummary = `
-MARSWALK FOUR-STRATEGY ROVER ROUTE COMPARISON
-
-MISSION DECISION FROM PYTHON BACKEND:
-- Overall recommendation: ${data.recommendation ?? "Unavailable"}
-- Selected route ID: ${data.selected_route_id || selected.route_id}
-- Selected strategy: ${data.recommended_strategy || selected.strategy}
-- Selection reason: ${data.recommendation_reason || "Not supplied"}
-- Successful candidates: ${data.successful_candidates ?? "Unavailable"}
-- Feasible candidates: ${data.feasible_candidates ?? "Unavailable"}
-- Maximum allowed slope: ${data.max_allowed_slope_deg ?? "Unavailable"} degrees
-
-MISSION COORDINATES:
-- Start pixel: X=${startPoint?.x}, Y=${startPoint?.y}
-- Destination pixel: X=${destinationPoint?.x}, Y=${destinationPoint?.y}
-
-ROVER SPECIFICATIONS:
-${JSON.stringify(rover, null, 2)}
-
-ALL ROUTE CANDIDATES:
-${JSON.stringify(comparisonSummary, null, 2)}
-
-SELECTED ROUTE DETAILS:
-- Outbound distance: ${selected.outbound_distance_m ?? "Unavailable"} meters
-- Return distance: ${selected.return_distance_m ?? "Unavailable"} meters
-- Round-trip distance: ${selectedDistance ?? "Unavailable"} meters
-- Outbound energy: ${selectedOutbound.total_energy_wh ?? "Unavailable"} Wh
-- Return energy: ${selectedReturn.total_energy_wh ?? "Unavailable"} Wh
-- Round-trip energy: ${selectedConsumption ?? "Unavailable"} Wh
-- Maximum slope: ${selectedSlope ?? "Unavailable"} degrees
-- Remaining battery: ${getCandidateRemainingBattery(selected) ?? "Unavailable"} percent
-- Outbound travel time: ${outboundTime ?? "Unavailable"} seconds
-- Return travel time: ${returnTime ?? "Unavailable"} seconds
-- Total round-trip time: ${totalTime ?? "Unavailable"} seconds
-
-IMPORTANT ANALYSIS INSTRUCTIONS:
-
-1. Compare shortest, safest, energy-efficient and balanced strategies.
-2. Explain actual measured differences in distance, energy, maximum slope and remaining battery.
-3. Explain why Python selected the recommended route using the supplied selection reason and scores.
-4. If the selected route is longer than the shortest route, explain whether its measured slope or energy differences justify the additional distance.
-5. If measurements are identical or nearly identical, explicitly state that no measurable advantage was demonstrated.
-6. Discuss infeasible candidates and their supplied reasons.
-7. Explain practical trade-offs between distance, terrain constraints and energy.
-8. Never invent missing terrain measurements.
-9. Never change the Python GO/NO-GO decision or independently select another route.
-10. Do not claim a route is safer unless supplied slope or feasibility measurements support that statement.
-11. Clearly distinguish outbound measurements from round-trip measurements.
-12. Do not confuse outbound travel time with round-trip travel time.
-
-DATA LIMITATIONS:
-
-- Mean slope is unavailable. The numeric zero in route_metrics is only a schema placeholder, not a measured value.
-- Elevation ascent is unavailable. The numeric zero in route_metrics is only a schema placeholder, not a measured value.
-- Elevation descent is unavailable. The numeric zero in route_metrics is only a schema placeholder, not a measured value.
-- Steep segment count is unavailable. The numeric zero in route_metrics is only a schema placeholder, not a measured value.
-- If outbound travel time is unavailable, its numeric zero is only a schema placeholder, not a measured value.
-- Total segment count is derived from the returned outbound route points.
-- Missing measurements must be described as unavailable, never as measured zero.
-- This is a prototype engineering estimate, not a flight-qualified rover model.
-
-Write a detailed, understandable comparison report with headings and bullet points. Explain why the backend selected its route over the alternatives.
-      `.trim();
-
-      const response = await explainMission({
-        route_metrics: routeMetrics,
-        route_mode:
-          data.recommended_strategy ||
-          selected.strategy ||
-          "balanced",
-        terrain_summary: terrainSummary,
-      });
-
-      if (!response?.explanation) {
-        throw new Error(
-          "Gemini returned an empty comparison explanation."
-        );
-      }
-
-      setGeminiExplanation(response.explanation);
-    } catch (err) {
-      console.error("Gemini comparison explanation error:", err);
-
-      setGeminiError(
-        err?.response?.data?.detail ||
-          err?.message ||
-          "Could not generate the Gemini route comparison explanation."
-      );
-    } finally {
-      setGeminiLoading(false);
-    }
-  }
-
-  // ------------------------------------------------
-  // COMPARE FOUR ROUTES
+  // COMPARE ROUTES
   // ------------------------------------------------
 
   async function calculateRoute() {
@@ -740,20 +515,17 @@ Write a detailed, understandable comparison report with headings and bullet poin
       },
     };
 
+    const controller = new AbortController();
+    pending.current = controller;
     setLoading(true);
 
     try {
-      const response = await compareRoverRoutes(payload);
+      const response = await compareRoverRoutes(payload, controller.signal);
+      if (controller.signal.aborted) return;
       const data = response?.data ?? response;
 
       if (!data || typeof data !== "object") {
         throw new Error("The backend returned an invalid response.");
-      }
-
-      if (data.status !== "success") {
-        throw new Error(
-          data.message || "The backend could not compare the routes."
-        );
       }
 
       if (!Array.isArray(data.candidates)) {
@@ -775,14 +547,8 @@ Write a detailed, understandable comparison report with headings and bullet poin
 
       setDisplayedCandidate(selected || null);
 
-      if (selected) {
-        await generateGeminiExplanation(data);
-      } else {
-        setGeminiError(
-          "The backend returned candidates but did not identify a selected route."
-        );
-      }
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Route comparison error:", err);
 
       setError(
@@ -791,7 +557,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
           "Could not compare rover routes. Check that the backend is running."
       );
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }
 
@@ -1058,6 +824,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
           <MarsMap
             className="h-[480px] w-full"
             startPoint={startPoint}
+            focusRoute={Boolean(trip || result)}
             destinationPoint={destinationPoint}
             routePoints={routePoints}
             routes={mapRoutes}
@@ -1265,7 +1032,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
             }`}
           >
             <p className="text-sm uppercase tracking-wider text-slate-400">
-              Python Backend Recommendation
+              Feasibility under modeled rover constraints
             </p>
 
             <h3
@@ -1275,7 +1042,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
                   : "text-red-400"
               }`}
             >
-              {result.recommendation || "NO-GO"}
+              {result.status === "failed" ? "No candidate found" : result.recommendation}
             </h3>
 
             <p className="mt-2 text-lg font-semibold text-white">
@@ -1285,6 +1052,7 @@ Write a detailed, understandable comparison report with headings and bullet poin
                 "Not available"}
             </p>
 
+            {result.status === "failed" && <p role="alert" className="mt-3 text-amber-200">{result.message}</p>}
             <p className="mt-3 text-sm text-slate-300">
               {result.recommendation_reason ||
                 "No recommendation reason was supplied."}
@@ -1301,46 +1069,6 @@ Write a detailed, understandable comparison report with headings and bullet poin
                 value={result.feasible_candidates ?? null}
               />
             </div>
-          </div>
-
-          {/* GEMINI REPORT */}
-
-          <div className="rounded-xl border border-slate-700 bg-slate-950/50 p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-bold">
-                  Gemini Mission Analysis
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  Gemini explains the Python backend results.
-                  Python remains responsible for the GO/NO-GO decision.
-                </p>
-              </div>
-
-              {geminiLoading && (
-                <span className="text-xs text-orange-400">
-                  Generating analysis...
-                </span>
-              )}
-            </div>
-
-            <GeminiReport
-              explanation={geminiExplanation}
-              loading={geminiLoading}
-              error={geminiError}
-            />
-
-            {geminiError && (
-              <button
-                type="button"
-                onClick={() => generateGeminiExplanation(result)}
-                disabled={geminiLoading}
-                className="mt-4 rounded-lg border border-orange-400 px-4 py-2 text-sm text-orange-300 hover:bg-orange-500/10 disabled:opacity-50"
-              >
-                Retry Gemini Analysis
-              </button>
-            )}
           </div>
 
           {/* ALL ROUTE CANDIDATES */}
@@ -1382,15 +1110,19 @@ Write a detailed, understandable comparison report with headings and bullet poin
                   activeCandidate.strategy}
               </p>
 
-              <p className="mt-1 text-xs text-slate-400">
-                Route ID: {activeCandidate.route_id}
-              </p>
-
-              <p className="mt-3 text-sm text-slate-400">
-                The highlighted route displays its outbound path
-                followed by its return path, when both are supplied
-                by the backend.
-              </p>
+              <button
+                type="button"
+                onClick={() => onUseRoute({
+                  start: activeCandidate.outbound_route_pixels[0],
+                  destination: activeCandidate.outbound_route_pixels.at(-1),
+                  strategy: activeCandidate.strategy,
+                  algorithm: activeCandidate.algorithm,
+                  rover: activeCandidate.energy.rover_specifications,
+                })}
+                className="mt-3 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold hover:bg-orange-500"
+              >
+                Use highlighted route in Mission Planner
+              </button>
             </div>
           )}
 
@@ -1406,6 +1138,9 @@ Write a detailed, understandable comparison report with headings and bullet poin
             </pre>
           </details>
 
+          {selectedCandidate && (
+            <RoverCommentary energy={selectedCandidate.energy} routeReason={result.recommendation_reason} />
+          )}
         </section>
       )}
     </div>

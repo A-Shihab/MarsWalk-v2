@@ -226,6 +226,7 @@ class RoverRouteCandidate(BaseModel):
 
     feasible: bool = False
 
+    maximum_segment_grade_deg: float | None = None
     selection_score: float | None = None
 
     selected: bool = False
@@ -258,3 +259,8 @@ class RoverRouteComparisonResponse(BaseModel):
     feasible_candidates: int = 0
 
     message: str | None = None
+
+
+class RoverCommentaryRequest(BaseModel):
+    energy: RoverEnergyResponse
+    route_reason: str = Field(default="", max_length=2000)
