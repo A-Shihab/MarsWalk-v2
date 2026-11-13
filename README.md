@@ -6,6 +6,16 @@
 
 ---
 
+## 🌐 Live Application
+
+**Try MARSWALK online:**
+
+🚀 **[Launch MARSWALK — Live Demo](http://13.211.175.29/)**
+
+MARSWALK is deployed on an Amazon AWS EC2 instance and is accessible through the live application link above.
+
+---
+
 ## 📋 Overview
 
 **MARSWALK** is a web-based Mars terrain intelligence and rover mission-planning platform designed to simulate and evaluate rover navigation across the Jezero Crater region of Mars.
@@ -109,7 +119,35 @@ The model was trained using AI4MARS rover-camera image data and integrated into 
 - Visualize the predicted segmentation results.
 - Explore terrain composition through AI-generated classification output.
 
-**Model evaluation:**
+#### 🖼️ Sample Image for U-Net Model Testing
+
+Want to try the AI Terrain Intelligence module?
+
+A sample rover-camera image is provided so users can test the trained U-Net semantic segmentation model without needing to find their own image.
+
+**📥 Download the Sample Test Image:**
+
+[Download U-Net Sample Test Image from Google Drive](https://drive.google.com/file/d/1hIFzpvLyQJ-SRwMGv1t3wPjTJWQqMLpz/view?usp=sharing)
+
+**How to test the U-Net model:**
+
+1. Open the MARSWALK live application.
+2. Navigate to the **AI Terrain Intelligence** module.
+3. Download the sample rover-camera image using the Google Drive link above.
+4. Upload the downloaded image to the U-Net image testing interface.
+5. Run the terrain prediction.
+6. Explore the generated segmentation mask and predicted terrain categories.
+
+The model analyzes the uploaded image and generates pixel-level predictions for four terrain categories:
+
+- Soil
+- Bedrock
+- Sand
+- Big Rock
+
+This sample image allows judges, reviewers, and other users to experience the U-Net model's inference capabilities directly.
+
+#### Model Evaluation
 
 The current model achieved the following results on the expert test dataset:
 
@@ -139,13 +177,13 @@ MARSWALK follows a frontend-backend architecture that separates user interaction
                    │       Mission Dashboard       │
                    └───────────────┬───────────────┘
                                    │
-                                REST API
+                                 REST API
                                    │
                                    ▼
                    ┌───────────────────────────────┐
                    │        FastAPI Backend        │
                    │                               │
-                   │       Mission Service         │
+                   │       Mission Service        │
                    │       Raster Service          │
                    │       Routing Service         │
                    │       Rover Energy Service    │
@@ -153,17 +191,17 @@ MARSWALK follows a frontend-backend architecture that separates user interaction
                    │       Gemini Integration      │
                    └───────────────┬───────────────┘
                                    │
-             ┌─────────────────────┼─────────────────────┐
-             │                     │                     │
-             ▼                     ▼                     ▼
-   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-   │ Terrain Engine   │  │ Navigation Engine│  │ AI Engine        │
-   │                  │  │                  │  │                  │
-   │ Jezero DEM       │  │ A* Search        │  │ Trained U-Net    │
-   │ Elevation        │  │ Dijkstra         │  │ Image Inference  │
-   │ Slope Analysis   │  │ Route Comparison │  │ Segmentation     │
-   │ Roughness        │  │ Traversability   │  │ Terrain Classes  │
-   └──────────────────┘  └──────────────────┘  └──────────────────┘
+              ┌────────────────────┼────────────────────┐
+              │                    │                    │
+              ▼                    ▼                    ▼
+    ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+    │ Terrain Engine   │ │ Navigation Engine│ │ AI Engine        │
+    │                  │ │                  │ │                  │
+    │ Jezero DEM       │ │ A* Search        │ │ Trained U-Net    │
+    │ Elevation        │ │ Dijkstra         │ │ Image Inference  │
+    │ Slope Analysis   │ │ Route Comparison │ │ Segmentation     │
+    │ Roughness        │ │ Traversability   │ │ Terrain Classes  │
+    └──────────────────┘ └──────────────────┘ └──────────────────┘
                                    │
                                    ▼
                    ┌───────────────────────────────┐
@@ -268,6 +306,7 @@ These calculations are simplified engineering estimates and are not validated fl
 | Image Processing | Pillow, OpenCV where configured |
 | Generative AI | Google Gemini API |
 | API Communication | REST API |
+| Deployment | Amazon AWS EC2 |
 
 ---
 
@@ -481,15 +520,22 @@ The model's performance should be interpreted according to its training data, te
 
 ## 🚀 Deployment
 
-MARSWALK is designed to support separate frontend and backend deployment.
+MARSWALK is deployed on an Amazon AWS EC2 instance.
+
+**Live Application:**
+
+[http://13.211.175.29/](http://13.211.175.29/)
+
+The deployment uses a frontend-backend architecture.
 
 A typical deployment configuration includes:
 
-- **Frontend:** Static hosting for React and Vite.
-- **Backend:** Python application hosting or Docker-based hosting.
+- **Frontend:** Static hosting or web server hosting for React and Vite.
+- **Backend:** Python application hosting using FastAPI and Uvicorn.
 - **Data and model weights:** Persistent or external storage appropriate for large raster datasets and trained models.
+- **Cloud Infrastructure:** Amazon AWS EC2.
 
-For deployment, update the frontend API configuration to point to the publicly accessible backend URL.
+For deployment, configure the frontend API settings to point to the publicly accessible backend URL.
 
 Configure Gemini API credentials using the deployment platform's environment variables.
 
